@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../app/constants/app_color.dart';
+import '../../inventory/views/inventory_screen.dart';
 import 'home_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
@@ -15,7 +16,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   final List<Widget> _screens = [
     const HomeScreen(),
     const _PlaceholderScreen(title: 'Modul Kasir (Pengerjaan Orang 2)'),
-    const _PlaceholderScreen(title: 'Modul Inventaris (Pengerjaan Orang 3)'),
+    const InventoryScreen(),
   ];
 
   @override
