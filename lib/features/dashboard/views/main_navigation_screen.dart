@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../app/constants/app_color.dart';
+import '../../inventory/views/inventory_screen.dart';
 import 'home_screen.dart';
 import '../../pos/views/pos_screen.dart';
 
@@ -17,6 +18,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     const HomeScreen(),
     PosScreen(),
     const _PlaceholderScreen(title: 'Modul Inventaris (Pengerjaan Orang 3)'),
+    const _PlaceholderScreen(title: 'Modul Kasir (Pengerjaan Orang 2)'),
+    const InventoryScreen(),
   ];
 
   @override
