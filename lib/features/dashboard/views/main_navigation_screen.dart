@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../app/constants/app_color.dart';
 import '../../inventory/views/inventory_screen.dart';
 import 'home_screen.dart';
+import '../../pos/views/pos_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -15,8 +16,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   final List<Widget> _screens = [
     const HomeScreen(),
-    const _PlaceholderScreen(title: 'Modul Kasir (Pengerjaan Orang 2)'),
     const InventoryScreen(),
+    PosScreen(),
   ];
 
   @override
@@ -54,20 +55,3 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 }
 
-class _PlaceholderScreen extends StatelessWidget {
-  final String title;
-  const _PlaceholderScreen({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Text(
-          title,
-          style: const TextStyle(color: AppColor.textSecondary, fontSize: 16),
-        ),
-      ),
-    );
-  }
-}
