@@ -17,8 +17,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   final List<Widget> _screens = [
     const HomeScreen(),
     PosScreen(),
-    const _PlaceholderScreen(title: 'Modul Inventaris (Pengerjaan Orang 3)'),
-    const _PlaceholderScreen(title: 'Modul Kasir (Pengerjaan Orang 2)'),
     const InventoryScreen(),
   ];
 
@@ -52,24 +50,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             label: 'Stok',
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _PlaceholderScreen extends StatelessWidget {
-  final String title;
-  const _PlaceholderScreen({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Text(
-          title,
-          style: const TextStyle(color: AppColor.textSecondary, fontSize: 16),
-        ),
       ),
     );
   }
