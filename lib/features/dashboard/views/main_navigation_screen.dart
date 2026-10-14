@@ -18,6 +18,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     const HomeScreen(),
     PosScreen(),
     const InventoryScreen(),
+
   ];
 
   @override
@@ -55,20 +56,3 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 }
 
-class _PlaceholderScreen extends StatelessWidget {
-  final String title;
-  const _PlaceholderScreen({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Text(
-          title,
-          style: const TextStyle(color: AppColor.textSecondary, fontSize: 16),
-        ),
-      ),
-    );
-  }
-}
