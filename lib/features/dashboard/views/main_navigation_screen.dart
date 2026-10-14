@@ -17,8 +17,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   final List<Widget> _screens = [
     const HomeScreen(),
     PosScreen(),
-    const _PlaceholderScreen(title: 'Modul Inventaris (Pengerjaan Orang 3)'),
-    const _PlaceholderScreen(title: 'Modul Kasir (Pengerjaan Orang 2)'),
     const InventoryScreen(),
   ];
 
