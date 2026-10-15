@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../shared/utils/currency_formatter.dart';
+import '../../../app/routes/app_routes.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -26,6 +27,41 @@ class HomeScreen extends StatelessWidget {
         foregroundColor: darkMauve,
         elevation: 0,
         automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Keluar',
+            onPressed: () {
+              // Tampilkan Pesan Konfirmasi Logout
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Konfirmasi Logout'),
+                  content: const Text('Apakah Anda yakin ingin keluar dari Aplikasi?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Batal'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context); // Tutup dialog konfirmasi
+
+                        // Hapus seluruh tumpukan halaman dan arahkan ke halaman login
+                        Navigator.pushNamedAndRemoveUntil(
+                          context,
+                          AppRoutes.login,
+                          (route) => false,
+                        );
+                      },
+                      child: const Text('Keluar'),
+                    ),
+                  ]
+                )
+              );
+            },
+          ),
+        ]
       ),
       body: Container(
         width: double.infinity,
@@ -262,3 +298,4 @@ class HomeScreen extends StatelessWidget {
     );
   }
 }
+
