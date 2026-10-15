@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../app/constants/app_color.dart';
-import '../../../app/constants/app_text_styles.dart';
+import '../../../../app/constants/app_color.dart';
 import '../../../shared/utils/currency_formatter.dart';
 
 class HomeScreen extends StatelessWidget {
