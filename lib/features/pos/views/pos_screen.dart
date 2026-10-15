@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'widgets/product_card.dart';
 import 'widgets/cart_bottom_sheet.dart';
@@ -18,17 +19,20 @@ class PosScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: Container(
+        width: double.infinity,
+        height: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFFFDE1E6), // Pink lembut dari gambar referensi
-              Color(0xFFE9E5FA), // Ungu kebiruan lembut
+              Color(0xFFFDE1E6),
+              Color(0xFFE9E5FA),
               Colors.white,
             ],
-            stops: [0.0, 0.3, 0.7],
+            stops: [0.0, 0.45, 1.0],
           ),
         ),
         child: SafeArea(
@@ -43,13 +47,15 @@ class PosScreen extends StatelessWidget {
               const SizedBox(height: 15),
               _buildCategoryFilters(),
               const SizedBox(height: 15),
-              // Area Daftar Produk
+
+              // Daftar produk
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: GridView.builder(
-                    padding: const EdgeInsets.only(bottom: 80),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    padding: const EdgeInsets.only(bottom: 90),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 16,
@@ -70,68 +76,118 @@ class PosScreen extends StatelessWidget {
         ),
       ),
 
-      // Tombol Floating Keranjang di Bawah
+      // Tombol keranjang
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF1E1E1E), // Hitam gelap
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+        backgroundColor: const Color(0xFFD99AAF),
+        foregroundColor: Colors.white,
+        elevation: 4,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(30),
+        ),
         onPressed: () {
-          // Buka Popup Keranjang
           showModalBottomSheet(
             context: context,
             isScrollControlled: true,
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-            ),
+            backgroundColor: Colors.transparent,
             builder: (context) => const CartBottomSheet(),
           );
         },
-        icon: const Icon(Icons.shopping_cart_outlined, color: Colors.white),
+        icon: const Icon(
+          Icons.shopping_cart_outlined,
+          color: Colors.white,
+        ),
         label: const Text(
           'Keranjang: Rp 39.500',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButtonLocation:
+          FloatingActionButtonLocation.centerFloat,
     );
   }
 
-  // Header Sapaan Kasir
+  // Header kasir
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 20,
+        vertical: 10,
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text('Toko Sederhana', style: TextStyle(fontSize: 16, color: Colors.black54)),
-              Text('Kasir Utama', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black)),
-            ],
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Toko Sederhana',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF806B80),
+                  ),
+                ),
+                SizedBox(height: 3),
+                Text(
+                  'Kasir Utama',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF594455),
+                  ),
+                ),
+              ],
+            ),
           ),
-          CircleAvatar(
-            backgroundColor: Colors.white,
-            radius: 24,
-            child: Icon(Icons.storefront, color: Colors.grey.shade800),
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.85),
+              borderRadius: BorderRadius.circular(17),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFD99AAF).withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.storefront,
+              color: Color(0xFFD99AAF),
+              size: 27,
+            ),
           ),
         ],
       ),
     );
   }
 
-  // Kartu Hitam Ringkasan
+  // Kartu ringkasan transaksi
   Widget _buildSummaryCard() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
+        width: double.infinity,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1E1E),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFD99AAF),
+              Color(0xFFBCA6D9),
+            ],
+          ),
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
+              color: const Color(0xFFD99AAF).withOpacity(0.22),
+              blurRadius: 14,
               offset: const Offset(0, 5),
             ),
           ],
@@ -139,50 +195,81 @@ class PosScreen extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text('Total Transaksi Shift Ini', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                SizedBox(height: 8),
-                Text('24 Struk', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-              ],
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Total Transaksi Shift Ini',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    '24 Struk',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 25,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
             ),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(13),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
+                color: Colors.white.withOpacity(0.2),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Icon(Icons.receipt_long, color: Colors.white),
-            )
+              child: const Icon(
+                Icons.receipt_long,
+                color: Colors.white,
+                size: 27,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  // Bar Pencarian & Scan
+  // Bar pencarian dan scan
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(30),
+          color: Colors.white.withOpacity(0.92),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: const Color(0xFFEADCE8),
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: const Color(0xFFD99AAF).withOpacity(0.07),
               blurRadius: 10,
-              offset: const Offset(0, 2),
+              offset: const Offset(0, 3),
             ),
           ],
         ),
         child: const TextField(
           decoration: InputDecoration(
             hintText: 'Cari barang atau scan...',
-            hintStyle: TextStyle(color: Colors.black38),
-            prefixIcon: Icon(Icons.search, color: Colors.black54),
-            suffixIcon: Icon(Icons.qr_code_scanner, color: Colors.black54),
+            hintStyle: TextStyle(
+              color: Color(0xFFAA96A8),
+              fontSize: 13,
+            ),
+            prefixIcon: Icon(
+              Icons.search,
+              color: Color(0xFFD99AAF),
+            ),
+            suffixIcon: Icon(
+              Icons.qr_code_scanner,
+              color: Color(0xFFD99AAF),
+            ),
             border: InputBorder.none,
             contentPadding: EdgeInsets.symmetric(vertical: 15),
           ),
@@ -191,7 +278,7 @@ class PosScreen extends StatelessWidget {
     );
   }
 
-  // Filter Kategori
+  // Filter kategori
   Widget _buildCategoryFilters() {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -212,27 +299,41 @@ class PosScreen extends StatelessWidget {
     );
   }
 
+  // Desain chip kategori
   Widget _categoryChip(String title, bool isSelected) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 20,
+        vertical: 10,
+      ),
       decoration: BoxDecoration(
-        color: isSelected ? const Color(0xFFC7D388) : Colors.white,
+        color: isSelected
+            ? const Color(0xFFD99AAF)
+            : Colors.white.withOpacity(0.88),
         borderRadius: BorderRadius.circular(30),
-        boxShadow: isSelected
-            ? []
-            : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 5,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+        border: Border.all(
+          color: isSelected
+              ? const Color(0xFFD99AAF)
+              : const Color(0xFFEADCE8),
+        ),
+        boxShadow: [
+          if (!isSelected)
+            BoxShadow(
+              color: const Color(0xFFD99AAF).withOpacity(0.06),
+              blurRadius: 5,
+              offset: const Offset(0, 2),
+            ),
+        ],
       ),
       child: Text(
         title,
         style: TextStyle(
-          color: isSelected ? Colors.black : Colors.black54,
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          color: isSelected
+              ? Colors.white
+              : const Color(0xFF806B80),
+          fontWeight:
+              isSelected ? FontWeight.bold : FontWeight.normal,
+          fontSize: 13,
         ),
       ),
     );
