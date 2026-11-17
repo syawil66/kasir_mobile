@@ -107,14 +107,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 padding: const EdgeInsets.all(26),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.92),
+                  color: Colors.white.withValues(alpha: 0.92),
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
                     color: const Color(0xFFF0DCE8),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: darkMauve.withOpacity(0.08),
+                      color: darkMauve.withValues(alpha: 0.08),
                       blurRadius: 24,
                       offset: const Offset(0, 8),
                     ),

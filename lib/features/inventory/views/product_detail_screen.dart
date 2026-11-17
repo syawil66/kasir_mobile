@@ -66,12 +66,12 @@ class ProductDetailScreen extends StatelessWidget {
                   width: 120,
                   height: 120,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.8),
+                    color: Colors.white.withValues(alpha: 0.8),
                     borderRadius: BorderRadius.circular(30),
                     boxShadow: [
                       BoxShadow(
                         color: const Color(0xFFD99AAF)
-                            .withOpacity(0.12),
+                            .withValues(alpha: 0.12),
                         blurRadius: 18,
                         offset: const Offset(0, 6),
                       ),
@@ -92,12 +92,12 @@ class ProductDetailScreen extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(22),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.94),
+                  color: Colors.white.withValues(alpha: 0.94),
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
                       color: const Color(0xFFD99AAF)
-                          .withOpacity(0.08),
+                          .withValues(alpha: 0.08),
                       blurRadius: 16,
                       offset: const Offset(0, 5),
                     ),

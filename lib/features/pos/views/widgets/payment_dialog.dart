@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class PaymentDialog extends StatelessWidget {
-  const PaymentDialog({Key? key}) : super(key: key);
+  const PaymentDialog({super.key});
 
   @override
   Widget build(BuildContext context) {

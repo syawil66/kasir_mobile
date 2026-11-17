@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'payment_dialog.dart'; // 1. Import file payment_dialog di paling atas
 
 class CartBottomSheet extends StatelessWidget {
-  const CartBottomSheet({Key? key}) : super(key: key);
+  const CartBottomSheet({super.key});
 
   @override
   Widget build(BuildContext context) {

@@ -183,7 +183,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         )
                       : null,
                   filled: true,
-                  fillColor: Colors.white.withOpacity(0.88),
+                  fillColor: Colors.white.withValues(alpha: 0.88),
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 14,
@@ -229,7 +229,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.8),
+                      color: Colors.white.withValues(alpha: 0.8),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -258,7 +258,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                               Icons.inventory_2_outlined,
                               size: 64,
                               color: const Color(0xFFD99AAF)
-                                  .withOpacity(0.7),
+                                  .withValues(alpha: 0.7),
                             ),
                             const SizedBox(height: 12),
                             Text(
@@ -299,7 +299,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           child: Material(
-                            color: Colors.white.withOpacity(0.94),
+                            color: Colors.white.withValues(alpha: 0.94),
                             borderRadius: BorderRadius.circular(18),
                             child: InkWell(
                               borderRadius: BorderRadius.circular(18),
@@ -467,14 +467,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
         vertical: 14,
       ),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.72),
+        color: Colors.white.withValues(alpha: 0.72),
         borderRadius: BorderRadius.circular(17),
         border: Border.all(
-          color: Colors.white.withOpacity(0.9),
+          color: Colors.white.withValues(alpha: 0.9),
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFD99AAF).withOpacity(0.08),
+            color: const Color(0xFFD99AAF).withValues(alpha: 0.08),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),

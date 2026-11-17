@@ -105,15 +105,15 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.88),
+                    color: Colors.white.withValues(alpha: 0.88),
                     borderRadius: BorderRadius.circular(22),
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.9),
+                      color: Colors.white.withValues(alpha: 0.9),
                     ),
                     boxShadow: [
                       BoxShadow(
                         color: const Color(0xFFD99AAF)
-                            .withOpacity(0.08),
+                            .withValues(alpha: 0.08),
                         blurRadius: 16,
                         offset: const Offset(0, 5),
                       ),
@@ -200,7 +200,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       _fieldLabel('Kategori Produk'),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
-                        value: selectedCategory,
+                        initialValue: selectedCategory,
                         isExpanded: true,
                         decoration: _inputDecoration(
                           'Pilih kategori',

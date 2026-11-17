@@ -4,7 +4,7 @@ import 'widgets/product_card.dart';
 import 'widgets/cart_bottom_sheet.dart';
 
 class PosScreen extends StatelessWidget {
-  PosScreen({Key? key}) : super(key: key);
+  PosScreen({super.key});
 
   // Data dummy produk Toko Sederhana
   final List<Map<String, dynamic>> products = [
@@ -146,11 +146,11 @@ class PosScreen extends StatelessWidget {
             width: 50,
             height: 50,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.85),
+              color: Colors.white.withValues(alpha: 0.85),
               borderRadius: BorderRadius.circular(17),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFFD99AAF).withOpacity(0.1),
+                  color: const Color(0xFFD99AAF).withValues(alpha: 0.1),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -186,7 +186,7 @@ class PosScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFD99AAF).withOpacity(0.22),
+              color: const Color(0xFFD99AAF).withValues(alpha: 0.22),
               blurRadius: 14,
               offset: const Offset(0, 5),
             ),
@@ -221,7 +221,7 @@ class PosScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(13),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: const Icon(
@@ -242,14 +242,14 @@ class PosScreen extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.92),
+          color: Colors.white.withValues(alpha: 0.92),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: const Color(0xFFEADCE8),
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFD99AAF).withOpacity(0.07),
+              color: const Color(0xFFD99AAF).withValues(alpha: 0.07),
               blurRadius: 10,
               offset: const Offset(0, 3),
             ),
@@ -309,7 +309,7 @@ class PosScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: isSelected
             ? const Color(0xFFD99AAF)
-            : Colors.white.withOpacity(0.88),
+            : Colors.white.withValues(alpha: 0.88),
         borderRadius: BorderRadius.circular(30),
         border: Border.all(
           color: isSelected
@@ -319,7 +319,7 @@ class PosScreen extends StatelessWidget {
         boxShadow: [
           if (!isSelected)
             BoxShadow(
-              color: const Color(0xFFD99AAF).withOpacity(0.06),
+              color: const Color(0xFFD99AAF).withValues(alpha: 0.06),
               blurRadius: 5,
               offset: const Offset(0, 2),
             ),
