@@ -13,7 +13,7 @@ class InventoryScreen extends StatefulWidget {
 }
 
 class _InventoryScreenState extends State<InventoryScreen> {
-  final InventoryController controller = InventoryController();
+  final List<ProductModel> products = [];
   final TextEditingController searchController = TextEditingController();
 
   String searchQuery = '';
@@ -32,7 +32,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   List<ProductModel> get filteredProducts {
-    return controller.products.where((product) {
+    return products.where((product) {
       final query = searchQuery.toLowerCase();
 
       return product.name.toLowerCase().contains(query) ||
@@ -42,14 +42,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   int get totalStock {
-    return controller.products.fold(
+    return products.fold(
       0,
       (total, product) => total + product.stock,
     );
   }
 
   int get lowStockCount {
-    return controller.products
+    return products
         .where((product) => product.stock <= 5)
         .length;
   }
@@ -122,7 +122,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       Expanded(
                         child: _summaryCard(
                           title: 'Jenis Produk',
-                          value: controller.products.length.toString(),
+                          value: products.length.toString(),
                           icon: Icons.inventory_2_outlined,
                         ),
                       ),
@@ -447,7 +447,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
           if (newProduct != null) {
             setState(() {
-              controller.products.add(newProduct);
+              products.add(newProduct);
             });
           }
         },

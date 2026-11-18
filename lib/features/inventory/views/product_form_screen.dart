@@ -34,6 +34,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       price: double.parse(priceController.text.trim()),
       stock: int.parse(stockController.text.trim()),
       category: selectedCategory,
+      updatedAt: DateTime.now(),
     );
 
     Navigator.pop(context, product);
