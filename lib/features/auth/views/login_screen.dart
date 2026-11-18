@@ -10,10 +10,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _usernameController =
-      TextEditingController();
-  final TextEditingController _passwordController =
-      TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   final AuthController _authController = AuthController();
 
   static const Color pastelPink = Color(0xFFFDE1E6);
@@ -22,23 +20,29 @@ class _LoginScreenState extends State<LoginScreen> {
   static const Color darkMauve = Color(0xFF594455);
   static const Color mutedMauve = Color(0xFF806B80);
 
+  bool _isLoading = false;
   bool _obscurePassword = true;
 
-  void _handleLogin() {
-    final username = _usernameController.text.trim();
+  Future<void> _handleLogin() async {
+    final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
-    if (username.isEmpty || password.isEmpty) {
+    if (email.isEmpty || password.isEmpty) {
       _showMessage(
-        'Username dan password tidak boleh kosong!',
+        'Email dan password tidak boleh kosong!',
         accentPink,
       );
       return;
     }
 
-    final isSuccess = _authController.login(username, password);
+    setState(() => _isLoading = true);
 
-    if (isSuccess) {
+    final errorMessage = await _authController.login(email, password);
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (errorMessage == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Login Berhasil!'),
@@ -52,7 +56,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } else {
       _showMessage(
-        'Username/password salah! (Gunakan: admin / 12345)',
+        errorMessage,
         const Color(0xFFB86B80),
       );
     }
@@ -73,7 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    _usernameController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -168,14 +172,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     const SizedBox(height: 32),
 
-                    _buildLabel('Username'),
+                    _buildLabel('Email'),
                     const SizedBox(height: 8),
                     TextField(
-                      controller: _usernameController,
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
                       decoration: _inputDecoration(
-                        hint: 'Masukkan username',
-                        icon: Icons.person_outline_rounded,
+                        hint: 'Masukkan email (contoh: admin@toko.com)',
+                        icon: Icons.email_outlined,
                       ),
                     ),
 
@@ -186,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     TextField(
                       controller: _passwordController,
                       obscureText: _obscurePassword,
-                      onSubmitted: (_) => _handleLogin(),
+                      onSubmitted: (_) => _isLoading ? null : _handleLogin(),
                       decoration: _inputDecoration(
                         hint: 'Masukkan password',
                         icon: Icons.lock_outline_rounded,
@@ -213,29 +218,40 @@ class _LoginScreenState extends State<LoginScreen> {
                       width: double.infinity,
                       height: 52,
                       child: ElevatedButton(
-                        onPressed: _handleLogin,
+                        onPressed: _isLoading ? null : _handleLogin,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: accentPink,
+                          disabledBackgroundColor:
+                              accentPink.withValues(alpha: 0.6),
                           foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
                         ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.login_rounded, size: 20),
-                            SizedBox(width: 10),
-                            Text(
-                              'Masuk',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2.5,
+                                ),
+                              )
+                            : const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.login_rounded, size: 20),
+                                  SizedBox(width: 10),
+                                  Text(
+                                    'Masuk',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
-                        ),
                       ),
                     ),
 
