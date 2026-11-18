@@ -1,21 +1,67 @@
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../auth/controllers/auth_controller.dart';
+import '../controllers/inventory_controller.dart';
 import '../models/product_model.dart';
 
 class ProductFormScreen extends StatefulWidget {
-  const ProductFormScreen({super.key});
+  /// Jika diisi, form dipakai untuk mengubah produk yang sudah ada.
+  final ProductModel? product;
+
+  const ProductFormScreen({
+    super.key,
+    this.product,
+  });
 
   @override
   State<ProductFormScreen> createState() => _ProductFormScreenState();
 }
 
 class _ProductFormScreenState extends State<ProductFormScreen> {
+  static const List<String> _defaultCategories = [
+    'Sembako',
+    'Minuman',
+    'Snack',
+    'Lainnya',
+  ];
+
   final formKey = GlobalKey<FormState>();
   final nameController = TextEditingController();
   final priceController = TextEditingController();
   final stockController = TextEditingController();
+  final InventoryController _controller = InventoryController();
 
-  String selectedCategory = 'Kategori 1';
+  late String selectedCategory;
+  bool _isSaving = false;
+
+  bool get _isEditing => widget.product != null;
+
+  List<String> get _categories {
+    final existing = widget.product?.category;
+    if (existing == null ||
+        existing.isEmpty ||
+        _defaultCategories.contains(existing)) {
+      return _defaultCategories;
+    }
+    return [..._defaultCategories, existing];
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    final product = widget.product;
+    if (product != null) {
+      nameController.text = product.name;
+      priceController.text = product.price.toStringAsFixed(0);
+      stockController.text = product.stock.toString();
+      selectedCategory = product.category.isEmpty
+          ? _defaultCategories.first
+          : product.category;
+    } else {
+      selectedCategory = _defaultCategories.first;
+    }
+  }
 
   @override
   void dispose() {
@@ -25,31 +71,66 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     super.dispose();
   }
 
-  void saveProduct() {
+  Future<void> _saveProduct() async {
+    if (!AuthController.isAdmin || _isSaving) return;
     if (!formKey.currentState!.validate()) return;
 
-    final product = ProductModel(
-      id: 'PRD${DateTime.now().millisecondsSinceEpoch}',
-      name: nameController.text.trim(),
-      price: double.parse(priceController.text.trim()),
-      stock: int.parse(stockController.text.trim()),
-      category: selectedCategory,
-      updatedAt: DateTime.now(),
-    );
+    setState(() => _isSaving = true);
 
-    Navigator.pop(context, product);
+    final name = nameController.text.trim();
+    final price = double.parse(priceController.text.trim());
+    final stock = int.parse(stockController.text.trim());
+
+    String? error;
+    if (_isEditing) {
+      error = await _controller.updateProduct(
+        ProductModel(
+          id: widget.product!.id,
+          name: name,
+          price: price,
+          stock: stock,
+          category: selectedCategory,
+          updatedAt: DateTime.now(),
+        ),
+      );
+    } else {
+      error = await _controller.addProduct(
+        name: name,
+        category: selectedCategory,
+        price: price,
+        stock: stock,
+      );
+    }
+
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error),
+          backgroundColor: const Color(0xFFB86B80),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    Navigator.pop(context, true);
   }
 
   @override
   Widget build(BuildContext context) {
+    if (!AuthController.isAdmin) {
+      return _buildAccessDenied();
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
-
-      // AppBar dengan warna pink muda
       appBar: AppBar(
-        title: const Text(
-          'Tambah Produk',
-          style: TextStyle(
+        title: Text(
+          _isEditing ? 'Edit Produk' : 'Tambah Produk',
+          style: const TextStyle(
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -57,8 +138,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         foregroundColor: const Color(0xFF594455),
         elevation: 0,
       ),
-
-      // Background gradasi yang sama dengan halaman lainnya
       body: Container(
         width: double.infinity,
         height: double.infinity,
@@ -81,27 +160,26 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header halaman
-                const Text(
-                  'Informasi Produk',
-                  style: TextStyle(
+                Text(
+                  _isEditing ? 'Ubah Informasi Produk' : 'Informasi Produk',
+                  style: const TextStyle(
                     fontSize: 23,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF594455),
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Masukkan informasi produk yang ingin ditambahkan.',
-                  style: TextStyle(
+                Text(
+                  _isEditing
+                      ? 'Perbarui data produk yang sudah terdaftar.'
+                      : 'Masukkan informasi produk yang ingin ditambahkan.',
+                  style: const TextStyle(
                     color: Color(0xFF806B80),
                     fontSize: 13,
                   ),
                 ),
-
                 const SizedBox(height: 25),
 
-                // Form dalam kartu putih
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
@@ -123,36 +201,34 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Nama produk
                       _fieldLabel('Nama Produk'),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: nameController,
+                        enabled: !_isSaving,
                         textCapitalization: TextCapitalization.words,
                         decoration: _inputDecoration(
                           'Masukkan nama produk',
                           Icons.shopping_bag_outlined,
                         ),
                         validator: (value) {
-                          if (value == null ||
-                              value.trim().isEmpty) {
+                          if (value == null || value.trim().isEmpty) {
                             return 'Nama produk wajib diisi';
                           }
                           return null;
                         },
                       ),
-
                       const SizedBox(height: 20),
 
-                      // Harga produk
                       _fieldLabel('Harga Produk (Rp)'),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: priceController,
-                        keyboardType:
-                            const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
+                        enabled: !_isSaving,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
                         decoration: _inputDecoration(
                           'Contoh: 15000',
                           Icons.payments_outlined,
@@ -169,15 +245,17 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                           return null;
                         },
                       ),
-
                       const SizedBox(height: 20),
 
-                      // Stok produk
                       _fieldLabel('Jumlah Stok'),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: stockController,
+                        enabled: !_isSaving,
                         keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
                         decoration: _inputDecoration(
                           'Masukkan jumlah stok',
                           Icons.warehouse_outlined,
@@ -194,10 +272,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                           return null;
                         },
                       ),
-
                       const SizedBox(height: 20),
 
-                      // Kategori produk
                       _fieldLabel('Kategori Produk'),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
@@ -207,74 +283,81 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                           'Pilih kategori',
                           Icons.category_outlined,
                         ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'Kategori 1',
-                            child: Text('Kategori 1'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Kategori 2',
-                            child: Text('Kategori 2'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Kategori 3',
-                            child: Text('Kategori 3'),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() {
-                              selectedCategory = value;
-                            });
-                          }
-                        },
+                        items: _categories
+                            .map(
+                              (category) => DropdownMenuItem(
+                                value: category,
+                                child: Text(category),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: _isSaving
+                            ? null
+                            : (value) {
+                                if (value != null) {
+                                  setState(() {
+                                    selectedCategory = value;
+                                  });
+                                }
+                              },
                       ),
-
                       const SizedBox(height: 28),
 
-                      // Tombol simpan
                       SizedBox(
                         width: double.infinity,
                         height: 52,
                         child: ElevatedButton.icon(
-                          onPressed: saveProduct,
-                          icon: const Icon(Icons.save_outlined),
-                          label: const Text(
-                            'Simpan Produk',
-                            style: TextStyle(
+                          onPressed: _isSaving ? null : _saveProduct,
+                          icon: _isSaving
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.save_outlined),
+                          label: Text(
+                            _isSaving
+                                ? 'Menyimpan...'
+                                : _isEditing
+                                    ? 'Simpan Perubahan'
+                                    : 'Simpan Produk',
+                            style: const TextStyle(
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                const Color(0xFFD99AAF),
+                            backgroundColor: const Color(0xFFD99AAF),
                             foregroundColor: Colors.white,
+                            disabledBackgroundColor:
+                                const Color(0xFFD99AAF)
+                                    .withValues(alpha: 0.6),
+                            disabledForegroundColor: Colors.white,
                             elevation: 3,
                             shape: RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(15),
+                              borderRadius: BorderRadius.circular(15),
                             ),
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 12),
 
-                      // Tombol batal
                       SizedBox(
                         width: double.infinity,
                         height: 50,
                         child: OutlinedButton(
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: _isSaving
+                              ? null
+                              : () => Navigator.pop(context),
                           style: OutlinedButton.styleFrom(
-                            foregroundColor:
-                                const Color(0xFFB76E8B),
+                            foregroundColor: const Color(0xFFB76E8B),
                             side: const BorderSide(
                               color: Color(0xFFD99AAF),
                             ),
                             shape: RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(15),
+                              borderRadius: BorderRadius.circular(15),
                             ),
                           ),
                           child: const Text(
@@ -288,7 +371,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 20),
               ],
             ),
@@ -298,7 +380,63 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     );
   }
 
-  // Label untuk setiap input
+  Widget _buildAccessDenied() {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text(
+          'Akses Ditolak',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: const Color(0xFFFDE1E6),
+        foregroundColor: const Color(0xFF594455),
+        elevation: 0,
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.lock_outline_rounded,
+                size: 64,
+                color: Color(0xFFD99AAF),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Khusus Admin',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF594455),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Hanya admin yang dapat menambah atau mengubah produk.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF806B80),
+                ),
+              ),
+              const SizedBox(height: 20),
+              OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFB76E8B),
+                  side: const BorderSide(color: Color(0xFFD99AAF)),
+                ),
+                child: const Text('Kembali'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _fieldLabel(String label) {
     return Text(
       label,
@@ -310,7 +448,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     );
   }
 
-  // Desain input dengan tema pink dan lavender
   InputDecoration _inputDecoration(
     String hint,
     IconData icon,

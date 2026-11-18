@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import '../../auth/controllers/auth_controller.dart';
 import 'widgets/product_card.dart';
 import 'widgets/cart_bottom_sheet.dart';
 
@@ -111,6 +112,9 @@ class PosScreen extends StatelessWidget {
 
   // Header kasir
   Widget _buildHeader() {
+    final user = AuthController.currentUser;
+    final roleLabel = user?.role == 'admin' ? 'Admin' : 'Kasir';
+
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: 20,
@@ -119,21 +123,23 @@ class PosScreen extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Toko Sederhana',
-                  style: TextStyle(
+                  'Toko Sederhana • $roleLabel',
+                  style: const TextStyle(
                     fontSize: 14,
                     color: Color(0xFF806B80),
                   ),
                 ),
-                SizedBox(height: 3),
+                const SizedBox(height: 3),
                 Text(
-                  'Kasir Utama',
-                  style: TextStyle(
+                  user?.name ?? 'Kasir',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF594455),

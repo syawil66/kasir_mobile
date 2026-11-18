@@ -1,14 +1,32 @@
-
 import 'package:flutter/material.dart';
+import '../../auth/controllers/auth_controller.dart';
+import '../controllers/inventory_controller.dart';
 import '../models/product_model.dart';
+import 'product_form_screen.dart';
 
-class ProductDetailScreen extends StatelessWidget {
+class ProductDetailScreen extends StatefulWidget {
   final ProductModel product;
 
   const ProductDetailScreen({
     super.key,
     required this.product,
   });
+
+  @override
+  State<ProductDetailScreen> createState() => _ProductDetailScreenState();
+}
+
+class _ProductDetailScreenState extends State<ProductDetailScreen> {
+  final InventoryController _controller = InventoryController();
+
+  late ProductModel _product;
+  bool _isDeleting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _product = widget.product;
+  }
 
   String formatPrice(double price) {
     return 'Rp ${price.toStringAsFixed(0).replaceAllMapped(
@@ -17,14 +35,83 @@ class ProductDetailScreen extends StatelessWidget {
         )}';
   }
 
+  Future<void> _editProduct() async {
+    if (!AuthController.isAdmin || _isDeleting) return;
+
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProductFormScreen(product: _product),
+      ),
+    );
+
+    if (!mounted || saved != true) return;
+
+    final refreshed = await _controller.getProduct(_product.id);
+    if (!mounted || refreshed == null) return;
+
+    setState(() {
+      _product = refreshed;
+    });
+  }
+
+  Future<void> _deleteProduct() async {
+    if (!AuthController.isAdmin || _isDeleting) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Hapus Produk'),
+        content: Text(
+          'Yakin ingin menghapus "${_product.name}"? '
+          'Tindakan ini tidak dapat dibatalkan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFC45D78),
+            ),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isDeleting = true);
+
+    final error = await _controller.deleteProduct(_product.id);
+
+    if (!mounted) return;
+    setState(() => _isDeleting = false);
+
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error),
+          backgroundColor: const Color(0xFFB86B80),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final bool isLowStock = product.stock <= 5;
+    final bool isLowStock = _product.stock <= 5;
+    final bool isAdmin = AuthController.isAdmin;
 
     return Scaffold(
       backgroundColor: Colors.white,
-
-      // AppBar senada dengan tema inventaris
       appBar: AppBar(
         title: const Text(
           'Detail Produk',
@@ -36,8 +123,6 @@ class ProductDetailScreen extends StatelessWidget {
         foregroundColor: const Color(0xFF594455),
         elevation: 0,
       ),
-
-      // Background gradasi pink, lavender, dan putih
       body: Container(
         width: double.infinity,
         height: double.infinity,
@@ -60,7 +145,6 @@ class ProductDetailScreen extends StatelessWidget {
             children: [
               const SizedBox(height: 10),
 
-              // Ikon produk
               Center(
                 child: Container(
                   width: 120,
@@ -84,10 +168,8 @@ class ProductDetailScreen extends StatelessWidget {
                   ),
                 ),
               ),
-
               const SizedBox(height: 24),
 
-              // Kartu informasi produk
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(22),
@@ -115,20 +197,16 @@ class ProductDetailScreen extends StatelessWidget {
                         color: Color(0xFFB76E8B),
                       ),
                     ),
-
                     const SizedBox(height: 12),
-
                     Text(
-                      product.name,
+                      _product.name,
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF594455),
                       ),
                     ),
-
                     const SizedBox(height: 8),
-
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
@@ -139,7 +217,7 @@ class ProductDetailScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        product.category,
+                        _product.category,
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -147,55 +225,44 @@ class ProductDetailScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-
                     const SizedBox(height: 24),
-
                     _detailRow(
                       icon: Icons.qr_code_rounded,
                       label: 'ID Produk',
-                      value: product.id,
+                      value: _product.id,
                     ),
-
                     const Divider(
                       height: 28,
                       color: Color(0xFFF0E5EC),
                     ),
-
                     _detailRow(
                       icon: Icons.category_outlined,
                       label: 'Kategori',
-                      value: product.category,
+                      value: _product.category,
                     ),
-
                     const Divider(
                       height: 28,
                       color: Color(0xFFF0E5EC),
                     ),
-
                     _detailRow(
                       icon: Icons.payments_outlined,
                       label: 'Harga',
-                      value: formatPrice(product.price),
+                      value: formatPrice(_product.price),
                       valueColor: const Color(0xFFB76E8B),
                     ),
-
                     const Divider(
                       height: 28,
                       color: Color(0xFFF0E5EC),
                     ),
-
                     _detailRow(
                       icon: Icons.inventory_2_outlined,
                       label: 'Stok Produk',
-                      value: '${product.stock} unit',
+                      value: '${_product.stock} unit',
                       valueColor: isLowStock
                           ? const Color(0xFFC45D78)
                           : const Color(0xFF8063A0),
                     ),
-
                     const SizedBox(height: 18),
-
-                    // Status stok
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(14),
@@ -236,10 +303,76 @@ class ProductDetailScreen extends StatelessWidget {
                   ],
                 ),
               ),
-
               const SizedBox(height: 24),
 
-              // Tombol kembali
+              // Aksi admin: ubah dan hapus produk
+              if (isAdmin) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 50,
+                        child: OutlinedButton.icon(
+                          onPressed: _isDeleting ? null : _editProduct,
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          label: const Text(
+                            'Edit',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFB76E8B),
+                            side: const BorderSide(
+                              color: Color(0xFFD99AAF),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: SizedBox(
+                        height: 50,
+                        child: ElevatedButton.icon(
+                          onPressed: _isDeleting ? null : _deleteProduct,
+                          icon: _isDeleting
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.delete_outline, size: 18),
+                          label: Text(
+                            _isDeleting ? 'Menghapus...' : 'Hapus',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFC45D78),
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor:
+                                const Color(0xFFC45D78)
+                                    .withValues(alpha: 0.6),
+                            disabledForegroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+              ],
+
               SizedBox(
                 width: double.infinity,
                 height: 52,
@@ -263,7 +396,6 @@ class ProductDetailScreen extends StatelessWidget {
                   ),
                 ),
               ),
-
               const SizedBox(height: 20),
             ],
           ),
@@ -272,7 +404,6 @@ class ProductDetailScreen extends StatelessWidget {
     );
   }
 
-  // Widget untuk menampilkan detail produk
   Widget _detailRow({
     required IconData icon,
     required String label,
@@ -294,9 +425,7 @@ class ProductDetailScreen extends StatelessWidget {
             size: 21,
           ),
         ),
-
         const SizedBox(width: 12),
-
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

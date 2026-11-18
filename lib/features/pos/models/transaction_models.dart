@@ -33,26 +33,36 @@ class TransactionModel {
   DateTime get date => createdAt;
 
   factory TransactionModel.fromMap(Map<String, dynamic> map, String id) {
+    final rawItems = map['items'];
+    final createdAt = map['createdAt'];
+
     return TransactionModel(
       id: id,
-      items: List<CartItemModel>.from(map['items'] ?? []),
-      subtotal: (map['subtotal'] ?? 0).toDouble(),
-      discount: (map['discount'] ?? 0).toDouble(),
-      finalTotal: (map['finalTotal'] ?? 0).toDouble(),
-      cashPaid: (map['cashPaid'] ?? 0).toDouble(),
-      changeAmount: (map['changeAmount'] ?? 0).toDouble(),
-      paymentMethod: map['paymentMethod'] ?? 'Tunai',
-      cashierId: map['cashierId'] ?? '',
-      cashierName: map['cashierName'] ?? 'Kasir',
-      createdAt: map['createdAt'] != null
-          ? (map['createdAt'] as Timestamp).toDate()
-          : DateTime.now(),
+      items: rawItems is List
+          ? rawItems
+                .whereType<Map>()
+                .map(
+                  (item) => CartItemModel.fromMap(
+                    Map<String, dynamic>.from(item),
+                  ),
+                )
+                .toList()
+          : const [],
+      subtotal: (map['subtotal'] as num?)?.toDouble() ?? 0,
+      discount: (map['discount'] as num?)?.toDouble() ?? 0,
+      finalTotal: (map['finalTotal'] as num?)?.toDouble() ?? 0,
+      cashPaid: (map['cashPaid'] as num?)?.toDouble() ?? 0,
+      changeAmount: (map['changeAmount'] as num?)?.toDouble() ?? 0,
+      paymentMethod: map['paymentMethod']?.toString() ?? 'Tunai',
+      cashierId: map['cashierId']?.toString() ?? '',
+      cashierName: map['cashierName']?.toString() ?? 'Kasir',
+      createdAt: createdAt is Timestamp ? createdAt.toDate() : DateTime.now(),
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'items': items,
+      'items': items.map((item) => item.toMap()).toList(),
       'subtotal': subtotal,
       'discount': discount,
       'finalTotal': finalTotal,

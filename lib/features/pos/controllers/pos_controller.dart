@@ -11,7 +11,7 @@ class PosController {
 
   // Hitung total sebelum diskon
   double get subtotal {
-    return cartItems.fold(0, (sum, item) => sum + item.totalPrice);
+    return cartItems.fold(0, (total, item) => total + item.totalPrice);
   }
 
   // Hitung total akhir setelah dikurangi diskon (minimal 0)
@@ -111,7 +111,8 @@ class PosController {
             throw Exception('Produk ${item.product.name} tidak ditemukan.');
           }
 
-          final currentStock = (snapshot.data()?['stock'] ?? 0) as int;
+          final currentStock =
+              (snapshot.data()?['stock'] as num?)?.toInt() ?? 0;
           if (currentStock < item.quantity) {
             throw Exception(
               'Stok ${item.product.name} tidak mencukupi (sisa: $currentStock).',

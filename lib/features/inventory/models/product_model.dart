@@ -18,15 +18,15 @@ class ProductModel {
   });
 
   factory ProductModel.fromMap(Map<String, dynamic> map, String id) {
+    final updatedAt = map['updatedAt'];
+
     return ProductModel(
       id: id,
-      name: map['name'] ?? '',
-      category: map['category'] ?? 'Umum',
-      price: (map['price'] ?? 0).toDouble(),
-      stock: (map['stock'] ?? 0).toInt(),
-      updatedAt: map['updatedAt'] != null
-          ? (map['updatedAt'] as Timestamp).toDate()
-          : null,
+      name: map['name']?.toString() ?? '',
+      category: map['category']?.toString() ?? 'Umum',
+      price: (map['price'] as num?)?.toDouble() ?? 0,
+      stock: (map['stock'] as num?)?.toInt() ?? 0,
+      updatedAt: updatedAt is Timestamp ? updatedAt.toDate() : null,
     );
   }
 

@@ -17,6 +17,21 @@ class InventoryController {
     });
   }
 
+  /// Ambil satu produk terbaru (dipakai setelah proses edit).
+  Future<ProductModel?> getProduct(String productId) async {
+    try {
+      final doc = await _productsRef.doc(productId).get();
+      if (!doc.exists) return null;
+
+      return ProductModel.fromMap(
+        doc.data() as Map<String, dynamic>,
+        doc.id,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Tambah produk baru (Khusus Admin)
   Future<String?> addProduct({
     required String name,
