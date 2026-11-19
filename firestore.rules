@@ -168,8 +168,16 @@ service cloud.firestore {
     // Pembuatan transaksi wajib lolos validasi struktur, nominal, dan identitas kasir.
     // Nota tidak boleh dihapus (stok tidak akan kembali); gunakan pembatalan (void).
     match /transactions/{transactionId} {
+      // `resource == null` wajib diizinkan: sebelum checkout, klien membaca
+      // dokumen transaksi yang belum ada untuk cek idempotency. Untuk dokumen
+      // yang tidak ada, `resource` bernilai null sehingga
+      // `resource.data.cashierId` error dan hasilnya permission-denied (hanya
+      // admin yang lolos karena `isAdmin()` dievaluasi lebih dulu). Guard ini
+      // tidak membuka data: dokumen yang tidak ada tidak berisi apa pun, dan
+      // nota milik kasir lain tetap hanya bisa dibaca admin.
       allow read: if isAdmin() || (
-        isSignedIn() && resource.data.cashierId == request.auth.uid
+        isSignedIn() &&
+        (resource == null || resource.data.cashierId == request.auth.uid)
       );
       allow create: if isValidTransactionCreate();
       allow update: if isValidVoidUpdate();

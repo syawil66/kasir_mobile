@@ -8,13 +8,78 @@ enum DiscountMode {
   percentage,
 }
 
+/// Kegagalan validasi checkout (harga berubah, stok kurang, dan sejenisnya).
+/// Tidak ada data yang ditulis ke Firestore, jadi ID checkout boleh dipakai ulang.
+class _CheckoutValidationException implements Exception {
+  final String message;
+  _CheckoutValidationException(this.message);
+
+  @override
+  String toString() => message;
+}
+
+/// ID checkout ternyata sudah terpakai untuk nota dengan isi berbeda.
+class _DuplicateCheckoutException implements Exception {
+  final String message;
+  _DuplicateCheckoutException(this.message);
+
+  @override
+  String toString() => message;
+}
+
+/// ID checkout yang dipakai berulang selama isi keranjang tidak berubah
+/// (idempotency key). Dipisah dari [PosController] agar bisa diuji tanpa
+/// Firebase.
+///
+/// Aturan pentingnya: bila percobaan checkout sebelumnya gagal secara ambigu
+/// (jaringan terputus/timeout, status commit di server belum diketahui),
+/// ID **tidak boleh diganti** walau kasir mengubah keranjang. Kalau diganti,
+/// nota yang sebenarnya sudah tersimpan akan terkirim dua kali.
+class CheckoutKey {
+  final String Function() _newId;
+
+  String? _id;
+  bool _unresolved = false;
+
+  CheckoutKey(this._newId);
+
+  /// ID yang akan dipakai pada percobaan berikutnya.
+  String get id => _id ??= _newId();
+
+  /// True bila hasil percobaan sebelumnya belum diketahui.
+  bool get isUnresolved => _unresolved;
+
+  /// Isi keranjang atau diskon berubah: ID boleh diganti, kecuali hasil
+  /// percobaan sebelumnya masih belum pasti.
+  void onContentChanged() {
+    if (_unresolved) return;
+    _id = null;
+  }
+
+  /// Percobaan gagal secara ambigu: pertahankan ID agar percobaan ulang
+  /// bersifat idempoten.
+  void markUnresolved() {
+    _unresolved = true;
+  }
+
+  /// Percobaan sudah pasti selesai (berhasil, ditolak, atau keranjang
+  /// dikosongkan): buang ID supaya transaksi berikutnya memakai ID baru.
+  void reset() {
+    _unresolved = false;
+    _id = null;
+  }
+}
+
 class PosController {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final List<CartItemModel> cartItems = [];
 
   DiscountMode discountMode = DiscountMode.nominal;
   double _discountInput = 0;
-  String? _checkoutId;
+
+  late final CheckoutKey _checkoutKey = CheckoutKey(
+    () => _firestore.collection('transactions').doc().id,
+  );
 
   /// Nota yang baru saja berhasil disimpan, dipakai untuk menampilkan struk.
   TransactionModel? lastCheckout;
@@ -58,7 +123,7 @@ class PosController {
   }
 
   void _resetCheckoutId() {
-    _checkoutId = null;
+    _checkoutKey.onContentChanged();
   }
 
   void _syncNominalCap() {
@@ -141,7 +206,11 @@ class PosController {
 
   void clearCart() {
     cartItems.clear();
-    clearDiscount();
+    discountMode = DiscountMode.nominal;
+    _discountInput = 0;
+    // Pengosongan keranjang dianggap menyelesaikan percobaan sebelumnya,
+    // jadi ID checkout ikut dibuang.
+    _checkoutKey.reset();
   }
 
   /// Proses Checkout Tunai: Validasi Stok & Harga Terbaru + Simpan Transaksi
@@ -169,14 +238,17 @@ class PosController {
     lastCheckout = null;
 
     try {
-      // Gunakan ID transaksi yang sama selama isi keranjang tidak berubah (idempotency)
-      final checkoutId =
-          _checkoutId ??= _firestore.collection('transactions').doc().id;
+      // ID transaksi dipakai ulang selama isi keranjang tidak berubah
+      // (idempotency); lihat [CheckoutKey].
+      final checkoutId = _checkoutKey.id;
       final transactionRef =
           _firestore.collection('transactions').doc(checkoutId);
 
       await _firestore.runTransaction((transaction) async {
         // 0. Cek idempotency: jika percobaan sebelumnya sudah commit di server, hentikan
+        //    Membaca dokumen yang belum ada tetap dinilai oleh rules pada path
+        //    `transactions/{id}`; firestore.rules mengizinkan `resource == null`
+        //    di sana supaya kasir tidak kena permission-denied di langkah ini.
         final existingTx = await transaction.get(transactionRef);
         if (existingTx.exists) {
           final existing = existingTx.data() ?? const <String, dynamic>{};
@@ -185,9 +257,10 @@ class PosController {
               ((existing['finalTotal'] as num?)?.toDouble() ?? -1) == finalTotal;
 
           if (!sameCashier || !sameTotal) {
-            throw Exception(
-              'ID transaksi ini sudah dipakai untuk transaksi lain. '
-              'Tutup lalu buka ulang halaman kasir sebelum mencoba lagi.',
+            throw _DuplicateCheckoutException(
+              'Nota ini sudah tersimpan sebelumnya dengan isi yang berbeda, '
+              'jadi keranjang dikosongkan untuk mencegah nota ganda. '
+              'Periksa tab Riwayat sebelum membuat transaksi baru.',
             );
           }
 
@@ -203,7 +276,9 @@ class PosController {
           final snapshot = await transaction.get(productRef);
 
           if (!snapshot.exists) {
-            throw Exception('Produk ${item.product.name} tidak ditemukan.');
+            throw _CheckoutValidationException(
+              'Produk ${item.product.name} tidak ditemukan.',
+            );
           }
 
           final data = snapshot.data()!;
@@ -211,11 +286,13 @@ class PosController {
           final currentPrice = (data['price'] as num?)?.toDouble();
 
           if (currentPrice == null || !currentPrice.isFinite) {
-            throw Exception('Harga produk ${item.product.name} tidak valid.');
+            throw _CheckoutValidationException(
+              'Harga produk ${item.product.name} tidak valid.',
+            );
           }
 
           if ((currentPrice - item.product.price).abs() > 0.01) {
-            throw Exception(
+            throw _CheckoutValidationException(
               'Harga ${item.product.name} telah berubah menjadi '
               'Rp ${currentPrice.toStringAsFixed(0)}. '
               'Hapus dan tambahkan ulang item ke keranjang.',
@@ -223,7 +300,7 @@ class PosController {
           }
 
           if (currentStock < item.quantity) {
-            throw Exception(
+            throw _CheckoutValidationException(
               'Stok ${item.product.name} tidak mencukupi (sisa: $currentStock).',
             );
           }
@@ -295,7 +372,19 @@ class PosController {
 
       clearCart();
       return null; // Checkout sukses
+    } on _DuplicateCheckoutException catch (e) {
+      // Nota dengan ID ini sudah tersimpan dengan isi berbeda, artinya
+      // percobaan sebelumnya kemungkinan besar berhasil di server.
+      // Keranjang dikosongkan agar kasir tidak membuat nota ganda.
+      clearCart();
+      return e.message;
+    } on _CheckoutValidationException catch (e) {
+      // Gagal sebelum ada data ditulis; status unresolved tidak diubah.
+      return e.message;
     } catch (e) {
+      // Jaringan putus/timeout: hasil commit belum diketahui. ID checkout
+      // dipertahankan walau keranjang diubah agar percobaan ulang idempoten.
+      _checkoutKey.markUnresolved();
       return e.toString().replaceAll('Exception: ', '');
     }
   }

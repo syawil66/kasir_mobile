@@ -91,6 +91,21 @@ async function getDoc(path, token) {
   return response.status;
 }
 
+// Query/list (bukan get dokumen tunggal), dipakai untuk memastikan aturan baca
+// tidak terbuka hanya karena guard `resource == null` pada dokumen tunggal.
+async function runQuery(structuredQuery, token) {
+  const response = await fetch(`${BASE}:runQuery`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ structuredQuery }),
+  });
+  await response.text();
+  return response.status;
+}
+
 function check(name, actual, expected) {
   const ok = actual === expected;
   if (!ok) failures += 1;
@@ -350,6 +365,42 @@ async function main() {
   check('kasir baca transaksi sendiri', await getDoc('transactions/tx-ok', KASIR1), 200);
   check('kasir lain baca transaksi ditolak', await getDoc('transactions/tx-ok', KASIR2), 403);
   check('admin baca transaksi kasir', await getDoc('transactions/tx-ok', ADMIN), 200);
+
+  // Cek idempotency di PosController membaca dokumen transaksi yang BELUM ADA
+  // sebelum checkout. Dokumen tidak ada berarti `resource == null`, jadi aturan
+  // baca tidak boleh langsung menyentuh `resource.data`.
+  check(
+    'kasir baca transaksi yang belum ada (cek idempotency) diizinkan',
+    await getDoc('transactions/tx-belum-ada', KASIR1),
+    404,
+  );
+  check(
+    'admin baca transaksi yang belum ada diizinkan',
+    await getDoc('transactions/tx-belum-ada', ADMIN),
+    404,
+  );
+  check(
+    'kasir list semua transaksi ditolak',
+    await runQuery({ from: [{ collectionId: 'transactions' }] }, KASIR1),
+    403,
+  );
+  check(
+    'kasir list transaksi miliknya sendiri diizinkan',
+    await runQuery(
+      {
+        from: [{ collectionId: 'transactions' }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: 'cashierId' },
+            op: 'EQUAL',
+            value: { stringValue: 'kasir1' },
+          },
+        },
+      },
+      KASIR1,
+    ),
+    200,
+  );
 
   // --- Jalur admin -------------------------------------------------------
   check(

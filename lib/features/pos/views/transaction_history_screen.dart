@@ -175,14 +175,24 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     if (confirmed != true || !mounted) return;
 
     setState(() => _voidingId = transaction.id);
-    final error = await _controller.voidTransaction(transaction.id);
+    final result = await _controller.voidTransaction(transaction.id);
     if (!mounted) return;
     setState(() => _voidingId = null);
 
-    _showMessage(
-      error ?? 'Nota berhasil dibatalkan dan stok sudah dikembalikan.',
-      isError: error != null,
-    );
+    if (!result.isSuccess) {
+      _showMessage(result.error!, isError: true);
+      return;
+    }
+
+    if (result.skippedProducts.isEmpty) {
+      _showMessage('Nota berhasil dibatalkan dan stok sudah dikembalikan.');
+    } else {
+      _showMessage(
+        'Nota dibatalkan. Stok tidak dikembalikan untuk produk yang sudah '
+        'dihapus: ${result.skippedProducts.join(', ')}.',
+        isError: true,
+      );
+    }
   }
 
   @override

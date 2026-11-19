@@ -74,6 +74,18 @@ class ProductSales {
   });
 }
 
+/// Hasil pembatalan nota. [skippedProducts] berisi produk yang sudah dihapus
+/// admin sehingga stoknya tidak bisa dikembalikan.
+class VoidResult {
+  final String? error;
+  final List<String> skippedProducts;
+
+  const VoidResult.success({this.skippedProducts = const []}) : error = null;
+  const VoidResult.failure(this.error) : skippedProducts = const [];
+
+  bool get isSuccess => error == null;
+}
+
 class TransactionController {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -136,15 +148,21 @@ class TransactionController {
   ///
   /// Stok hanya dikembalikan sekali: penanda `voided` di dokumen transaksi
   /// membuat percobaan kedua ditolak di dalam transaksi Firestore.
-  Future<String?> voidTransaction(String transactionId) async {
+  Future<VoidResult> voidTransaction(String transactionId) async {
     if (!AuthController.isAdmin) {
-      return 'Hanya admin yang dapat membatalkan transaksi.';
+      return const VoidResult.failure(
+        'Hanya admin yang dapat membatalkan transaksi.',
+      );
     }
 
     final adminId = AuthController.currentUser?.id;
     if (adminId == null) {
-      return 'Sesi login tidak valid. Silakan login ulang.';
+      return const VoidResult.failure(
+        'Sesi login tidak valid. Silakan login ulang.',
+      );
     }
+
+    final skipped = <String>[];
 
     try {
       await _firestore.runTransaction((transaction) async {
@@ -170,12 +188,20 @@ class TransactionController {
 
             final item = Map<String, dynamic>.from(rawItem);
             final productId = item['productId']?.toString() ?? '';
+            final productName = item['productName']?.toString() ?? '';
             final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
             if (productId.isEmpty || quantity <= 0) continue;
 
             final productRef = _firestore.collection('products').doc(productId);
             final productSnapshot = await transaction.get(productRef);
-            if (!productSnapshot.exists) continue;
+
+            // Produk sudah dihapus admin: tidak ada stok untuk dikembalikan.
+            if (!productSnapshot.exists) {
+              skipped.add(
+                productName.isEmpty ? productId : productName,
+              );
+              continue;
+            }
 
             final currentStock =
                 (productSnapshot.data()?['stock'] as num?)?.toInt() ?? 0;
@@ -197,9 +223,9 @@ class TransactionController {
         });
       });
 
-      return null;
+      return VoidResult.success(skippedProducts: skipped);
     } catch (e) {
-      return e.toString().replaceAll('Exception: ', '');
+      return VoidResult.failure(e.toString().replaceAll('Exception: ', ''));
     }
   }
 
