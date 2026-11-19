@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Firebase/Firestore membutuhkan akses internet juga pada build release. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="kasir_app"
         android:name="${applicationName}"

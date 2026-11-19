@@ -1,30 +1,97 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:kasir_app/main.dart';
+import 'package:kasir_app/app/constants/product_categories.dart';
+import 'package:kasir_app/features/auth/models/user_model.dart';
+import 'package:kasir_app/features/pos/controllers/pos_controller.dart';
+import 'package:kasir_app/shared/utils/currency_formatter.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  test('CurrencyFormatter menambahkan pemisah ribuan', () {
+    expect(CurrencyFormatter.formatRupiah(0), 'Rp 0');
+    expect(CurrencyFormatter.formatRupiah(1500), 'Rp 1.500');
+    expect(CurrencyFormatter.formatRupiah(1500000), 'Rp 1.500.000');
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  test('UserModel.fromMap memakai nilai default dan uid autentikasi', () {
+    final user = UserModel.fromMap({'name': 'Ani'}, 'uid-1');
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    expect(user.id, 'uid-1');
+    expect(user.name, 'Ani');
+    expect(user.username, '');
+    expect(user.role, 'kasir');
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  group('ProductCategories', () {
+    test('daftar standar dipakai untuk produk baru', () {
+      expect(ProductCategories.withExisting(null), ProductCategories.all);
+      expect(ProductCategories.withExisting('  '), ProductCategories.all);
+      expect(ProductCategories.withExisting('Minuman'), ProductCategories.all);
+    });
+
+    test('kategori lama di luar daftar tetap bisa dipilih', () {
+      expect(
+        ProductCategories.withExisting('Umum'),
+        [...ProductCategories.all, 'Umum'],
+      );
+    });
+
+    test('kategori lama dirapikan dari spasi', () {
+      expect(
+        ProductCategories.withExisting('  Elektronik '),
+        [...ProductCategories.all, 'Elektronik'],
+      );
+    });
+  });
+
+  group('PosController.computeDiscountAmount', () {
+    double nominal(double subtotal, double input) {
+      return PosController.computeDiscountAmount(
+        subtotal: subtotal,
+        mode: DiscountMode.nominal,
+        input: input,
+      );
+    }
+
+    double percent(double subtotal, double input) {
+      return PosController.computeDiscountAmount(
+        subtotal: subtotal,
+        mode: DiscountMode.percentage,
+        input: input,
+      );
+    }
+
+    test('nominal dipakai apa adanya', () {
+      expect(nominal(20000, 5000), 5000);
+    });
+
+    test('nominal dibatasi subtotal', () {
+      expect(nominal(20000, 25000), 20000);
+    });
+
+    test('persentase dihitung dari subtotal', () {
+      expect(percent(20000, 10), 2000);
+      expect(percent(20000, 100), 20000);
+    });
+
+    test('persentase di luar 0..100 tetap aman', () {
+      expect(percent(20000, 0), 0);
+      expect(percent(20000, 150), 20000);
+      expect(percent(20000, -10), 0);
+    });
+
+    test('subtotal nol atau negatif menghasilkan diskon nol', () {
+      expect(nominal(0, 5000), 0);
+      expect(percent(-100, 50), 0);
+    });
+
+    test('pembulatan tidak boleh melebihi subtotal', () {
+      // Subtotal pecahan: 0.6 dibulatkan ke 1.0 akan melebihi subtotal.
+      expect(nominal(0.6, 0.6), 0.6);
+      expect(percent(0.6, 100), 0.6);
+    });
+
+    test('diskon dibulatkan ke rupiah utuh', () {
+      expect(nominal(20000, 4999.4), 4999);
+      expect(nominal(20000, 4999.6), 5000);
+    });
   });
 }

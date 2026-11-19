@@ -1,0 +1,25 @@
+import 'package:flutter/material.dart';
+import '../../features/auth/views/login_screen.dart';
+import '../../features/auth/views/splash_screen.dart';
+import '../../features/auth/views/user_management_screen.dart';
+import '../../features/dashboard/views/main_navigation_screen.dart';
+import '../../features/pos/views/pos_screen.dart';
+import '../../features/inventory/views/inventory_screen.dart';
+
+class AppRoutes {
+  static const String splash = '/';
+  static const String login = '/login';
+  static const String dashboard = '/dashboard';
+  static const String pos = '/pos';
+  static const String inventory = '/inventory';
+  static const String users = '/users';
+
+  static Map<String, WidgetBuilder> get routes => {
+    splash: (context) => const SplashScreen(),
+    login: (context) => const LoginScreen(),
+    dashboard: (context) => const MainNavigationScreen(),
+    pos: (context) => PosScreen(),
+    inventory: (context) => const InventoryScreen(),
+    users: (context) => const UserManagementScreen(),
+  };
+}
