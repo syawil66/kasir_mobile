@@ -59,11 +59,11 @@ There is no `build_runner`, codegen, formatter config, or deployment script. Fir
 
 ## Current gaps / traps
 
-- **POS is still UI-only.** `PosScreen`, `CartBottomSheet`, and `PaymentDialog` use hardcoded products, Rp 39.500 totals, no-op quantity buttons, and payment methods that cannot be selected. `PosController` (cart, discount, transactional checkout + stock decrement) exists but is still not imported anywhere. As a result, no transactions are ever written and the dashboard will stay at Rp 0.
+- POS is wired to Firestore through `PosController`: the product grid comes from `InventoryController`, cart/discount state lives in `PosController`, and `PaymentDialog` supports Tunai and QRIS. Checkout runs a Firestore transaction that decrements stock and writes to `transactions`, so the dashboard metrics update after a sale. Admin and kasir share the same POS flow.
 - `AppRoutes.pos` and `AppRoutes.inventory` bypass the bottom-nav shell and its role ordering. Prefer navigating through `MainNavigationScreen`.
 - `ProductModel.toMap()` embeds `FieldValue.serverTimestamp()`, so it is not a plain serializable map.
 - Editing a product pre-fills price with `toStringAsFixed(0)`, so fractional prices are rounded in the form.
-- The product update rule allows raising `stock` (only the `>= 0` bound is enforced).
+- The product update rule allows non-admin users to change only `stock` + `updatedAt`, and stock may only decrease (`<=` current value) while staying `>= 0`.
 - Empty/unused files: `lib/features/pos/views/receipt_screen.dart`, `lib/shared/utils/date_formatter.dart`, `lib/shared/widgets/product_card.dart`.
 - `AppColor`/`AppTextStyles` are blue-themed and barely used; screens hardcode the pastel pink/lavender palette per file. Match the per-screen palette when editing UI.
 - `test/widget_test.dart` is now unit-test only; there is no widget/integration test coverage.

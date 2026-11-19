@@ -84,8 +84,12 @@ class PosController {
     discountAmount = 0;
   }
 
-  /// Proses Checkout Tunai: Simpan Transaksi + Potong Stok Otomatis di Firestore
-  Future<String?> processCheckout({required double cashPaid}) async {
+  /// Proses Checkout: Simpan Transaksi + Potong Stok Otomatis di Firestore.
+  /// Dapat dipakai oleh admin maupun kasir selama sesi login masih aktif.
+  Future<String?> processCheckout({
+    required double cashPaid,
+    String paymentMethod = 'Tunai',
+  }) async {
     if (cartItems.isEmpty) {
       return 'Keranjang belanja masih kosong!';
     }
@@ -94,8 +98,12 @@ class PosController {
       return 'Uang tunai kurang dari total tagihan!';
     }
 
+    final currentUser = AuthController.currentUser;
+    if (currentUser == null) {
+      return 'Sesi login tidak valid. Silakan login ulang.';
+    }
+
     try {
-      final currentUser = AuthController.currentUser;
       final transactionRef = _firestore.collection('transactions').doc();
 
       await _firestore.runTransaction((transaction) async {
@@ -138,9 +146,9 @@ class PosController {
           'finalTotal': finalTotal,
           'cashPaid': cashPaid,
           'changeAmount': cashPaid - finalTotal,
-          'paymentMethod': 'Tunai',
-          'cashierId': currentUser?.id ?? '',
-          'cashierName': currentUser?.name ?? 'Kasir',
+          'paymentMethod': paymentMethod,
+          'cashierId': currentUser.id,
+          'cashierName': currentUser.name,
           'createdAt': FieldValue.serverTimestamp(),
         });
       });

@@ -1,24 +1,154 @@
-
 import 'package:flutter/material.dart';
+import '../../../shared/utils/currency_formatter.dart';
 import '../../auth/controllers/auth_controller.dart';
-import 'widgets/product_card.dart';
+import '../../dashboard/controllers/dashboard_controller.dart';
+import '../../inventory/controllers/inventory_controller.dart';
+import '../../inventory/models/product_model.dart';
+import '../controllers/pos_controller.dart';
 import 'widgets/cart_bottom_sheet.dart';
+import 'widgets/product_card.dart';
 
-class PosScreen extends StatelessWidget {
-  PosScreen({super.key});
+/// Halaman kasir (POS). Dapat diakses oleh admin maupun kasir selama
+/// pengguna sudah login.
+class PosScreen extends StatefulWidget {
+  const PosScreen({super.key});
 
-  // Data dummy produk Toko Sederhana
-  final List<Map<String, dynamic>> products = [
-    {'name': 'Minyak Goreng 1L', 'price': 'Rp 18.500'},
-    {'name': 'Beras Premium 5kg', 'price': 'Rp 75.000'},
-    {'name': 'Mie Instan Goreng', 'price': 'Rp 3.000'},
-    {'name': 'Gula Pasir 1kg', 'price': 'Rp 15.000'},
-    {'name': 'Kopi Sachet', 'price': 'Rp 1.500'},
-    {'name': 'Sabun Mandi', 'price': 'Rp 4.500'},
-  ];
+  @override
+  State<PosScreen> createState() => _PosScreenState();
+}
+
+class _PosScreenState extends State<PosScreen> {
+  static const Color pastelPink = Color(0xFFFDE1E6);
+  static const Color pastelLavender = Color(0xFFE9E5FA);
+  static const Color accentPink = Color(0xFFD99AAF);
+  static const Color darkMauve = Color(0xFF594455);
+  static const Color mutedMauve = Color(0xFF806B80);
+  static const Color dangerMauve = Color(0xFFC45D78);
+
+  final PosController _posController = PosController();
+  final InventoryController _inventoryController = InventoryController();
+
+  late Stream<List<ProductModel>> _productsStream;
+  late final Stream<DashboardSummary> _summaryStream;
+
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  String _selectedCategory = 'Semua';
+
+  @override
+  void initState() {
+    super.initState();
+    _productsStream = _inventoryController.getProductsStream();
+    _summaryStream = DashboardController().getTodaySummary();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _showMessage(String message, Color color) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: color,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+  }
+
+  void _reloadProducts() {
+    setState(() {
+      _productsStream = _inventoryController.getProductsStream();
+    });
+  }
+
+  List<String> _categoryOptions(List<ProductModel> products) {
+    final categories = <String>{'Semua'};
+    for (final product in products) {
+      final category = product.category.trim();
+      if (category.isNotEmpty) {
+        categories.add(category);
+      }
+    }
+    return categories.toList();
+  }
+
+  List<ProductModel> _visibleProducts(
+    List<ProductModel> products,
+    String selectedCategory,
+  ) {
+    final query = _searchQuery.trim().toLowerCase();
+
+    return products.where((product) {
+      final matchesCategory = selectedCategory == 'Semua' ||
+          product.category == selectedCategory;
+      final matchesQuery = query.isEmpty ||
+          product.name.toLowerCase().contains(query) ||
+          product.category.toLowerCase().contains(query);
+
+      return matchesCategory && matchesQuery;
+    }).toList();
+  }
+
+  void _addToCart(ProductModel product) {
+    final error = _posController.addToCart(product);
+
+    if (error != null) {
+      _showMessage(error, dangerMauve);
+      return;
+    }
+
+    setState(() {});
+    _showMessage(
+      '${product.name} ditambahkan ke keranjang.',
+      const Color(0xFF8DAD96),
+    );
+  }
+
+  Future<void> _openCart() async {
+    if (_posController.cartItems.isEmpty) {
+      _showMessage('Keranjang belanja masih kosong.', dangerMauve);
+      return;
+    }
+
+    final success = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => CartBottomSheet(
+        controller: _posController,
+        onChanged: () {
+          if (mounted) setState(() {});
+        },
+      ),
+    );
+
+    if (!mounted) return;
+    setState(() {});
+
+    if (success == true) {
+      _showMessage(
+        'Transaksi berhasil disimpan. Stok produk sudah diperbarui.',
+        const Color(0xFF8DAD96),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final cartCount = _posController.cartItems.fold<int>(
+      0,
+      (total, item) => total + item.quantity,
+    );
+    final hasCart = _posController.cartItems.isNotEmpty;
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Container(
@@ -29,8 +159,8 @@ class PosScreen extends StatelessWidget {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFFFDE1E6),
-              Color(0xFFE9E5FA),
+              pastelPink,
+              pastelLavender,
               Colors.white,
             ],
             stops: [0.0, 0.45, 1.0],
@@ -48,58 +178,33 @@ class PosScreen extends StatelessWidget {
               const SizedBox(height: 15),
               _buildCategoryFilters(),
               const SizedBox(height: 15),
-
-              // Daftar produk
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: GridView.builder(
-                    padding: const EdgeInsets.only(bottom: 90),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                      childAspectRatio: 0.8,
-                    ),
-                    itemCount: products.length,
-                    itemBuilder: (context, index) {
-                      return ProductCard(
-                        name: products[index]['name'],
-                        price: products[index]['price'],
-                      );
-                    },
-                  ),
-                ),
-              ),
+              Expanded(child: _buildProductGrid()),
             ],
           ),
         ),
       ),
-
-      // Tombol keranjang
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFFD99AAF),
+        backgroundColor: accentPink,
         foregroundColor: Colors.white,
         elevation: 4,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(30),
         ),
-        onPressed: () {
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (context) => const CartBottomSheet(),
-          );
-        },
-        icon: const Icon(
-          Icons.shopping_cart_outlined,
-          color: Colors.white,
+        onPressed: _openCart,
+        icon: Badge(
+          isLabelVisible: cartCount > 0,
+          backgroundColor: darkMauve,
+          label: Text('$cartCount'),
+          child: const Icon(
+            Icons.shopping_cart_outlined,
+            color: Colors.white,
+          ),
         ),
-        label: const Text(
-          'Keranjang: Rp 39.500',
-          style: TextStyle(
+        label: Text(
+          hasCart
+              ? 'Keranjang • ${CurrencyFormatter.formatRupiah(_posController.finalTotal)}'
+              : 'Keranjang Kosong',
+          style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
           ),
@@ -113,7 +218,7 @@ class PosScreen extends StatelessWidget {
   // Header kasir
   Widget _buildHeader() {
     final user = AuthController.currentUser;
-    final roleLabel = user?.role == 'admin' ? 'Admin' : 'Kasir';
+    final roleLabel = AuthController.isAdmin ? 'Admin' : 'Kasir';
 
     return Padding(
       padding: const EdgeInsets.symmetric(
@@ -131,7 +236,7 @@ class PosScreen extends StatelessWidget {
                   'Toko Sederhana • $roleLabel',
                   style: const TextStyle(
                     fontSize: 14,
-                    color: Color(0xFF806B80),
+                    color: mutedMauve,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -142,7 +247,7 @@ class PosScreen extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF594455),
+                    color: darkMauve,
                   ),
                 ),
               ],
@@ -156,7 +261,7 @@ class PosScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(17),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFFD99AAF).withValues(alpha: 0.1),
+                  color: accentPink.withValues(alpha: 0.1),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -164,7 +269,7 @@ class PosScreen extends StatelessWidget {
             ),
             child: const Icon(
               Icons.storefront,
-              color: Color(0xFFD99AAF),
+              color: accentPink,
               size: 27,
             ),
           ),
@@ -173,7 +278,7 @@ class PosScreen extends StatelessWidget {
     );
   }
 
-  // Kartu ringkasan transaksi
+  // Kartu ringkasan transaksi hari ini
   Widget _buildSummaryCard() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -185,14 +290,14 @@ class PosScreen extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color(0xFFD99AAF),
+              accentPink,
               Color(0xFFBCA6D9),
             ],
           ),
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFD99AAF).withValues(alpha: 0.22),
+              color: accentPink.withValues(alpha: 0.22),
               blurRadius: 14,
               offset: const Offset(0, 5),
             ),
@@ -201,25 +306,37 @@ class PosScreen extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Total Transaksi Shift Ini',
+                  const Text(
+                    'Total Transaksi Hari Ini',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 13,
                     ),
                   ),
-                  SizedBox(height: 8),
-                  Text(
-                    '24 Struk',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 25,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  const SizedBox(height: 8),
+                  StreamBuilder<DashboardSummary>(
+                    stream: _summaryStream,
+                    builder: (context, snapshot) {
+                      final summary = snapshot.data;
+                      final value = snapshot.hasError
+                          ? 'Tidak tersedia'
+                          : summary == null
+                              ? 'Memuat...'
+                              : '${summary.transactionCount} Struk';
+
+                      return Text(
+                        value,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 25,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -242,7 +359,7 @@ class PosScreen extends StatelessWidget {
     );
   }
 
-  // Bar pencarian dan scan
+  // Bar pencarian
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -255,29 +372,45 @@ class PosScreen extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFD99AAF).withValues(alpha: 0.07),
+              color: accentPink.withValues(alpha: 0.07),
               blurRadius: 10,
               offset: const Offset(0, 3),
             ),
           ],
         ),
-        child: const TextField(
+        child: TextField(
+          controller: _searchController,
+          onChanged: (value) {
+            setState(() {
+              _searchQuery = value;
+            });
+          },
           decoration: InputDecoration(
-            hintText: 'Cari barang atau scan...',
-            hintStyle: TextStyle(
+            hintText: 'Cari barang...',
+            hintStyle: const TextStyle(
               color: Color(0xFFAA96A8),
               fontSize: 13,
             ),
-            prefixIcon: Icon(
+            prefixIcon: const Icon(
               Icons.search,
-              color: Color(0xFFD99AAF),
+              color: accentPink,
             ),
-            suffixIcon: Icon(
-              Icons.qr_code_scanner,
-              color: Color(0xFFD99AAF),
-            ),
+            suffixIcon: _searchQuery.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(
+                      Icons.close,
+                      color: accentPink,
+                    ),
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() {
+                        _searchQuery = '';
+                      });
+                    },
+                  )
+                : null,
             border: InputBorder.none,
-            contentPadding: EdgeInsets.symmetric(vertical: 15),
+            contentPadding: const EdgeInsets.symmetric(vertical: 15),
           ),
         ),
       ),
@@ -286,60 +419,190 @@ class PosScreen extends StatelessWidget {
 
   // Filter kategori
   Widget _buildCategoryFilters() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          _categoryChip('Semua', true),
-          const SizedBox(width: 10),
-          _categoryChip('Sembako', false),
-          const SizedBox(width: 10),
-          _categoryChip('Minuman', false),
-          const SizedBox(width: 10),
-          _categoryChip('Snack', false),
-          const SizedBox(width: 10),
-          _categoryChip('Lainnya', false),
-        ],
-      ),
+    return StreamBuilder<List<ProductModel>>(
+      stream: _productsStream,
+      builder: (context, snapshot) {
+        final products = snapshot.data ?? const <ProductModel>[];
+        final options = _categoryOptions(products);
+        final selected = options.contains(_selectedCategory)
+            ? _selectedCategory
+            : 'Semua';
+
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            children: [
+              for (var index = 0; index < options.length; index++) ...[
+                if (index > 0) const SizedBox(width: 10),
+                _categoryChip(
+                  options[index],
+                  options[index] == selected,
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 
   // Desain chip kategori
   Widget _categoryChip(String title, bool isSelected) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 20,
-        vertical: 10,
-      ),
-      decoration: BoxDecoration(
-        color: isSelected
-            ? const Color(0xFFD99AAF)
-            : Colors.white.withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(
-          color: isSelected
-              ? const Color(0xFFD99AAF)
-              : const Color(0xFFEADCE8),
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedCategory = title;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 10,
         ),
-        boxShadow: [
-          if (!isSelected)
-            BoxShadow(
-              color: const Color(0xFFD99AAF).withValues(alpha: 0.06),
-              blurRadius: 5,
-              offset: const Offset(0, 2),
-            ),
-        ],
-      ),
-      child: Text(
-        title,
-        style: TextStyle(
+        decoration: BoxDecoration(
           color: isSelected
-              ? Colors.white
-              : const Color(0xFF806B80),
-          fontWeight:
-              isSelected ? FontWeight.bold : FontWeight.normal,
-          fontSize: 13,
+              ? accentPink
+              : Colors.white.withValues(alpha: 0.88),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(
+            color: isSelected
+                ? accentPink
+                : const Color(0xFFEADCE8),
+          ),
+          boxShadow: [
+            if (!isSelected)
+              BoxShadow(
+                color: accentPink.withValues(alpha: 0.06),
+                blurRadius: 5,
+                offset: const Offset(0, 2),
+              ),
+          ],
+        ),
+        child: Text(
+          title,
+          style: TextStyle(
+            color: isSelected ? Colors.white : mutedMauve,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Daftar produk dari Firestore
+  Widget _buildProductGrid() {
+    return StreamBuilder<List<ProductModel>>(
+      stream: _productsStream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: accentPink),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return _buildStatus(
+            icon: Icons.cloud_off_rounded,
+            title: 'Gagal memuat produk',
+            subtitle: '${snapshot.error}',
+            action: OutlinedButton.icon(
+              onPressed: _reloadProducts,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Coba Lagi'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFB76E8B),
+                side: const BorderSide(color: accentPink),
+              ),
+            ),
+          );
+        }
+
+        final allProducts = snapshot.data ?? const <ProductModel>[];
+        final options = _categoryOptions(allProducts);
+        final selected = options.contains(_selectedCategory)
+            ? _selectedCategory
+            : 'Semua';
+        final products = _visibleProducts(allProducts, selected);
+
+        if (products.isEmpty) {
+          return _buildStatus(
+            icon: Icons.inventory_2_outlined,
+            title: allProducts.isEmpty
+                ? 'Belum ada produk'
+                : 'Produk tidak ditemukan',
+            subtitle: allProducts.isEmpty
+                ? 'Admin perlu menambahkan produk di menu Stok.'
+                : 'Coba gunakan kata kunci atau kategori lain.',
+          );
+        }
+
+        return GridView.builder(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 0.78,
+          ),
+          itemCount: products.length,
+          itemBuilder: (context, index) {
+            final product = products[index];
+
+            return ProductCard(
+              product: product,
+              onAdd: () => _addToCart(product),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildStatus({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    Widget? action,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 56,
+              color: accentPink.withValues(alpha: 0.8),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: mutedMauve,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFFAA96A8),
+                fontSize: 12,
+              ),
+            ),
+            if (action != null) ...[
+              const SizedBox(height: 14),
+              action,
+            ],
+          ],
         ),
       ),
     );

@@ -16,6 +16,9 @@ class AuthController {
   /// Mengembalikan null jika berhasil, atau pesan error (String) jika gagal
   Future<String?> login(String email, String password) async {
     try {
+      // Jangan pernah memakai role lama saat proses login akun baru.
+      currentUser = null;
+
       // 1. Proses login ke Firebase Authentication
       UserCredential credential = await _auth.signInWithEmailAndPassword(
         email: email.trim(),
@@ -31,6 +34,7 @@ class AuthController {
       final error = await _loadUserProfile(uid);
       if (error != null) {
         await _auth.signOut();
+        currentUser = null;
         return error;
       }
 
@@ -58,19 +62,26 @@ class AuthController {
   /// dengan membaca ulang profil/role pengguna dari Firestore.
   /// Mengembalikan true jika sesi berhasil dipulihkan.
   Future<bool> restoreSession() async {
-    if (currentUser != null) return true;
-
     final firebaseUser = _auth.currentUser;
-    if (firebaseUser == null) return false;
+    if (firebaseUser == null) {
+      // Tidak ada sesi Firebase yang tersisa.
+      currentUser = null;
+      return false;
+    }
+
+    // Profil di memori hanya valid jika berasal dari akun Firebase yang sama.
+    if (currentUser?.id == firebaseUser.uid) return true;
 
     try {
       final error = await _loadUserProfile(firebaseUser.uid);
       if (error != null) {
         await _auth.signOut();
+        currentUser = null;
         return false;
       }
       return true;
     } catch (_) {
+      currentUser = null;
       return false;
     }
   }
@@ -94,7 +105,11 @@ class AuthController {
   }
 
   Future<void> logout() async {
-    await _auth.signOut();
-    currentUser = null;
+    try {
+      await _auth.signOut();
+    } finally {
+      // Selalu bersihkan state di memori agar UI tidak memakai role lama.
+      currentUser = null;
+    }
   }
 }

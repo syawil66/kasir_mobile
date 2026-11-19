@@ -79,9 +79,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: pastelPink,
       appBar: AppBar(
-        title: const Text(
-          'Dashboard Toko',
-          style: TextStyle(
+        title: Text(
+          isAdmin ? 'Dashboard Toko' : 'Akun Kasir',
+          style: const TextStyle(
             color: darkMauve,
             fontWeight: FontWeight.bold,
           ),
