@@ -38,8 +38,12 @@ class _PosScreenState extends State<PosScreen> {
   @override
   void initState() {
     super.initState();
+    final user = AuthController.currentUser;
     _productsStream = _inventoryController.getProductsStream();
-    _summaryStream = DashboardController().getTodaySummary();
+    _summaryStream = DashboardController().getTodaySummary(
+      isAdmin: AuthController.isAdmin,
+      cashierId: user?.id ?? '',
+    );
   }
 
   @override
@@ -213,7 +217,6 @@ class _PosScreenState extends State<PosScreen> {
     );
   }
 
-  // Header kasir
   Widget _buildHeader() {
     final user = AuthController.currentUser;
     final roleLabel = AuthController.isAdmin ? 'Admin' : 'Kasir';
@@ -276,7 +279,6 @@ class _PosScreenState extends State<PosScreen> {
     );
   }
 
-  // Kartu ringkasan transaksi hari ini
   Widget _buildSummaryCard() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -357,7 +359,6 @@ class _PosScreenState extends State<PosScreen> {
     );
   }
 
-  // Bar pencarian
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -415,7 +416,6 @@ class _PosScreenState extends State<PosScreen> {
     );
   }
 
-  // Satu StreamBuilder tunggal untuk chip kategori dan daftar produk
   Widget _buildCatalogSection() {
     return StreamBuilder<List<ProductModel>>(
       stream: _productsStream,
@@ -506,7 +506,6 @@ class _PosScreenState extends State<PosScreen> {
     );
   }
 
-  // Desain chip kategori
   Widget _categoryChip(String title, bool isSelected) {
     return GestureDetector(
       onTap: () {

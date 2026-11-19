@@ -71,8 +71,12 @@ class PosController {
     _resetCheckoutId();
   }
 
-  /// Tambah barang ke keranjang dengan validasi sisa stok
+/// Tambah barang ke keranjang dengan validasi harga dan sisa stok
   String? addToCart(ProductModel product) {
+    if (!product.price.isFinite || product.price <= 0) {
+      return 'Harga ${product.name} tidak valid!';
+    }
+
     if (product.stock <= 0) {
       return 'Stok ${product.name} sudah habis!';
     }
@@ -127,6 +131,10 @@ class PosController {
   }) async {
     if (cartItems.isEmpty) {
       return 'Keranjang belanja masih kosong!';
+    }
+
+    if (!cashPaid.isFinite || cashPaid < 0) {
+      return 'Nominal pembayaran tidak valid!';
     }
 
     if (cashPaid < finalTotal) {

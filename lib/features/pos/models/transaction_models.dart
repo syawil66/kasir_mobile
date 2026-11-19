@@ -7,10 +7,12 @@ class TransactionModel {
   final List<CartItemModel> items;
   final double subtotal;
   final double discount;
+  final String discountMode;
+  final double discountInput;
   final double finalTotal;
   final double cashPaid;
   final double changeAmount;
-  final String paymentMethod; // Default: 'Tunai' (tanpa QR)
+  final String paymentMethod; // Tunai
   final String cashierId;
   final String cashierName;
   final DateTime createdAt;
@@ -20,6 +22,8 @@ class TransactionModel {
     required this.items,
     required this.subtotal,
     required this.discount,
+    this.discountMode = 'nominal',
+    this.discountInput = 0,
     required this.finalTotal,
     required this.cashPaid,
     required this.changeAmount,
@@ -40,7 +44,7 @@ class TransactionModel {
       id: id,
       items: rawItems is List
           ? rawItems
-                .whereType<Map>()
+                .whereType()
                 .map(
                   (item) => CartItemModel.fromMap(
                     Map<String, dynamic>.from(item),
@@ -50,6 +54,8 @@ class TransactionModel {
           : const [],
       subtotal: (map['subtotal'] as num?)?.toDouble() ?? 0,
       discount: (map['discount'] as num?)?.toDouble() ?? 0,
+      discountMode: map['discountMode']?.toString() ?? 'nominal',
+      discountInput: (map['discountInput'] as num?)?.toDouble() ?? 0,
       finalTotal: (map['finalTotal'] as num?)?.toDouble() ?? 0,
       cashPaid: (map['cashPaid'] as num?)?.toDouble() ?? 0,
       changeAmount: (map['changeAmount'] as num?)?.toDouble() ?? 0,
@@ -65,6 +71,8 @@ class TransactionModel {
       'items': items.map((item) => item.toMap()).toList(),
       'subtotal': subtotal,
       'discount': discount,
+      'discountMode': discountMode,
+      'discountInput': discountInput,
       'finalTotal': finalTotal,
       'cashPaid': cashPaid,
       'changeAmount': changeAmount,

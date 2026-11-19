@@ -16,18 +16,32 @@ class DashboardController {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   /// Omzet dan jumlah transaksi sejak pukul 00:00 hari ini.
-  Stream<DashboardSummary> getTodaySummary() {
+  /// Admin melihat seluruh transaksi; kasir hanya melihat transaksinya sendiri.
+  Stream<DashboardSummary> getTodaySummary({
+    required bool isAdmin,
+    required String cashierId,
+  }) {
+    if (!isAdmin && cashierId.trim().isEmpty) {
+      return Stream.value(
+        const DashboardSummary(revenue: 0, transactionCount: 0),
+      );
+    }
+
     final now = DateTime.now();
     final startOfDay = DateTime(now.year, now.month, now.day);
 
-    return _firestore
+    Query> query = _firestore
         .collection('transactions')
         .where(
           'createdAt',
           isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
-        )
-        .snapshots()
-        .map((snapshot) {
+        );
+
+    if (!isAdmin) {
+      query = query.where('cashierId', isEqualTo: cashierId);
+    }
+
+    return query.snapshots().map((snapshot) {
       double revenue = 0;
       for (final doc in snapshot.docs) {
         revenue += (doc.data()['finalTotal'] as num?)?.toDouble() ?? 0;

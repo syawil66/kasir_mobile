@@ -238,8 +238,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                             value?.trim() ?? '',
                           );
 
-                          if (price == null || price <= 0) {
-                            return 'Harga harus lebih dari 0';
+                          if (price == null || !price.isFinite || price <= 0) {
+                            return 'Harga harus berupa angka valid dan lebih dari 0';
                           }
 
                           return null;

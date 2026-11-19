@@ -54,13 +54,16 @@ class _PaymentDialogState extends State<PaymentDialog> {
     });
   }
 
-  Future<void> _submit() async {
+Future<void> _submit() async {
     if (_isProcessing) return;
 
     final cashPaid = _cashPaid;
-    if (cashPaid == null || cashPaid < 0 || (widget.total > 0 && cashPaid == 0)) {
+    if (cashPaid == null ||
+        !cashPaid.isFinite ||
+        cashPaid < 0 ||
+        (widget.total > 0 && cashPaid == 0)) {
       setState(() {
-        _error = 'Masukkan nominal uang tunai yang diterima.';
+        _error = 'Masukkan nominal uang tunai yang valid.';
       });
       return;
     }

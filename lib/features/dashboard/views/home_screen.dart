@@ -32,9 +32,17 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _summaryStream = _dashboardController.getTodaySummary();
+    final user = AuthController.currentUser;
+    final isAdmin = AuthController.isAdmin;
+
+    _summaryStream = _dashboardController.getTodaySummary(
+      isAdmin: isAdmin,
+      cashierId: user?.id ?? '',
+    );
     _productsStream = _inventoryController.getProductsStream();
-    _recentTransactionsStream = _dashboardController.getRecentTransactions();
+    _recentTransactionsStream = isAdmin
+        ? _dashboardController.getRecentTransactions()
+        : Stream.value(const <TransactionModel>[]);
   }
 
   Future<void> _confirmLogout() async {
@@ -60,7 +68,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (confirmed != true || !mounted) return;
 
-    // Akhiri sesi Firebase sebelum kembali ke halaman login.
     await AuthController().logout();
 
     if (!mounted) return;
