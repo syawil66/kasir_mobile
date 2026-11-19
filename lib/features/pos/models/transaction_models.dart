@@ -17,6 +17,11 @@ class TransactionModel {
   final String cashierName;
   final DateTime createdAt;
 
+  /// Nota yang dibatalkan admin. Stok sudah dikembalikan saat pembatalan.
+  final bool voided;
+  final DateTime? voidedAt;
+  final String? voidedBy;
+
   TransactionModel({
     required this.id,
     required this.items,
@@ -31,10 +36,16 @@ class TransactionModel {
     required this.cashierId,
     required this.cashierName,
     required this.createdAt,
+    this.voided = false,
+    this.voidedAt,
+    this.voidedBy,
   });
 
   double get totalAmount => finalTotal;
   DateTime get date => createdAt;
+
+  int get itemCount =>
+      items.fold(0, (total, item) => total + item.quantity);
 
   factory TransactionModel.fromMap(Map<String, dynamic> map, String id) {
     final rawItems = map['items'];
@@ -63,6 +74,11 @@ class TransactionModel {
       cashierId: map['cashierId']?.toString() ?? '',
       cashierName: map['cashierName']?.toString() ?? 'Kasir',
       createdAt: createdAt is Timestamp ? createdAt.toDate() : DateTime.now(),
+      voided: map['voided'] == true,
+      voidedAt: map['voidedAt'] is Timestamp
+          ? (map['voidedAt'] as Timestamp).toDate()
+          : null,
+      voidedBy: map['voidedBy']?.toString(),
     );
   }
 
@@ -80,6 +96,11 @@ class TransactionModel {
       'cashierId': cashierId,
       'cashierName': cashierName,
       'createdAt': FieldValue.serverTimestamp(),
+      if (voided) ...{
+        'voided': true,
+        'voidedAt': FieldValue.serverTimestamp(),
+        'voidedBy': voidedBy,
+      },
     };
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../app/constants/product_categories.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../controllers/inventory_controller.dart';
 import '../models/product_model.dart';
@@ -18,13 +19,6 @@ class ProductFormScreen extends StatefulWidget {
 }
 
 class _ProductFormScreenState extends State<ProductFormScreen> {
-  static const List<String> _defaultCategories = [
-    'Sembako',
-    'Minuman',
-    'Snack',
-    'Lainnya',
-  ];
-
   final formKey = GlobalKey<FormState>();
   final nameController = TextEditingController();
   final priceController = TextEditingController();
@@ -36,14 +30,16 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
   bool get _isEditing => widget.product != null;
 
-  List<String> get _categories {
-    final existing = widget.product?.category;
-    if (existing == null ||
-        existing.isEmpty ||
-        _defaultCategories.contains(existing)) {
-      return _defaultCategories;
-    }
-    return [..._defaultCategories, existing];
+  List<String> get _categories =>
+      ProductCategories.withExisting(widget.product?.category);
+
+  /// Tampilkan harga lama apa adanya: harga bulat tanpa desimal, harga
+  /// pecahan (data lama) tetap utuh supaya tidak berubah saat disimpan.
+  static String _priceToInput(double price) {
+    if (!price.isFinite) return '';
+    return price == price.roundToDouble()
+        ? price.toStringAsFixed(0)
+        : price.toString();
   }
 
   @override
@@ -53,13 +49,13 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     final product = widget.product;
     if (product != null) {
       nameController.text = product.name;
-      priceController.text = product.price.toStringAsFixed(0);
+      priceController.text = _priceToInput(product.price);
       stockController.text = product.stock.toString();
-      selectedCategory = product.category.isEmpty
-          ? _defaultCategories.first
-          : product.category;
+      selectedCategory = product.category.trim().isEmpty
+          ? ProductCategories.all.first
+          : product.category.trim();
     } else {
-      selectedCategory = _defaultCategories.first;
+      selectedCategory = ProductCategories.all.first;
     }
   }
 
@@ -75,11 +71,22 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     if (!AuthController.isAdmin || _isSaving) return;
     if (!formKey.currentState!.validate()) return;
 
-    setState(() => _isSaving = true);
-
     final name = nameController.text.trim();
-    final price = double.parse(priceController.text.trim());
-    final stock = int.parse(stockController.text.trim());
+    final price = double.tryParse(priceController.text.trim());
+    final stock = int.tryParse(stockController.text.trim());
+
+    if (price == null || !price.isFinite || price <= 0 || stock == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Harga atau stok tidak valid.'),
+          backgroundColor: Color(0xFFB86B80),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
 
     String? error;
     if (_isEditing) {
@@ -115,6 +122,18 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       );
       return;
     }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _isEditing
+              ? 'Produk "$name" berhasil diperbarui.'
+              : 'Produk "$name" berhasil ditambahkan.',
+        ),
+        backgroundColor: const Color(0xFF7C9A7E),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
 
     Navigator.pop(context, true);
   }

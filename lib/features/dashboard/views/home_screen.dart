@@ -6,6 +6,7 @@ import '../../auth/models/user_model.dart';
 import '../../inventory/controllers/inventory_controller.dart';
 import '../../inventory/models/product_model.dart';
 import '../../pos/models/transaction_models.dart';
+import '../../pos/views/receipt_screen.dart';
 import '../controllers/dashboard_controller.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -39,7 +40,9 @@ class _HomeScreenState extends State<HomeScreen> {
       isAdmin: isAdmin,
       cashierId: user?.id ?? '',
     );
-    _productsStream = _inventoryController.getProductsStream();
+    _productsStream = isAdmin
+        ? _inventoryController.getProductsStream()
+        : Stream<List<ProductModel>>.value(const <ProductModel>[]);
     _recentTransactionsStream = isAdmin
         ? _dashboardController.getRecentTransactions()
         : Stream.value(const <TransactionModel>[]);
@@ -195,19 +198,56 @@ class _HomeScreenState extends State<HomeScreen> {
           stream: _productsStream,
           builder: (context, snapshot) {
             final products = snapshot.data;
-            final value = snapshot.hasError
+            final hasError = snapshot.hasError;
+
+            final totalValue = hasError
                 ? 'Tidak tersedia'
                 : products == null
                     ? 'Memuat...'
-                    : '${products.where((product) => product.stock <= 5).length} '
-                        'Barang Perlu Ditambah';
+                    : '${products.length} Produk';
 
-            return _buildSummaryCard(
-              title: 'Stok Menipis',
-              value: value,
-              icon: Icons.warning_amber_rounded,
-              iconColor: const Color(0xFFD6A15D),
-              isHorizontal: true,
+            final lowStock = products
+                    ?.where((product) => product.stock <= 5)
+                    .toList() ??
+                const <ProductModel>[];
+            final lowStockValue = hasError
+                ? 'Tidak tersedia'
+                : products == null
+                    ? 'Memuat...'
+                    : '${lowStock.length} Barang';
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _buildSummaryCard(
+                        title: 'Total Produk',
+                        value: totalValue,
+                        icon: Icons.inventory_2_rounded,
+                        iconColor: const Color(0xFF8FA9C9),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildSummaryCard(
+                        title: 'Stok Menipis',
+                        value: lowStockValue,
+                        icon: Icons.warning_amber_rounded,
+                        iconColor: const Color(0xFFD6A15D),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _buildLowStockList(
+                  products: products,
+                  lowStock: lowStock,
+                  hasError: hasError,
+                ),
+              ],
             );
           },
         ),
@@ -222,7 +262,150 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         const SizedBox(height: 14),
         _buildRecentTransactions(),
+        const SizedBox(height: 22),
+        SizedBox(
+          width: double.infinity,
+          height: 50,
+          child: OutlinedButton.icon(
+            onPressed: () {
+              Navigator.pushNamed(context, AppRoutes.users);
+            },
+            icon: const Icon(Icons.manage_accounts_outlined),
+            label: const Text(
+              'Kelola Pengguna',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFFB76E8B),
+              side: const BorderSide(color: accentPink),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+          ),
+        ),
       ],
+    );
+  }
+
+  /// Daftar produk dengan stok menipis (<= 5), khusus admin.
+  /// Memakai snapshot stream produk yang sama dengan kartu ringkasan.
+  Widget _buildLowStockList({
+    required List<ProductModel>? products,
+    required List<ProductModel> lowStock,
+    required bool hasError,
+  }) {
+    if (hasError || products == null) return const SizedBox.shrink();
+
+    if (lowStock.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.9),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFF0DCE8)),
+        ),
+        child: const Row(
+          children: [
+            Icon(
+              Icons.check_circle_outline,
+              color: Color(0xFF7C9A7E),
+              size: 22,
+            ),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Semua stok dalam kondisi aman.',
+                style: TextStyle(color: mutedMauve, fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final visible = lowStock.take(5).toList();
+    final remaining = lowStock.length - visible.length;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF0DCE8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.inventory_2_outlined,
+                color: Color(0xFFD6A15D),
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Produk Stok Menipis',
+                  style: TextStyle(
+                    color: darkMauve,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              if (remaining > 0)
+                Text(
+                  '+$remaining lagi',
+                  style: const TextStyle(color: mutedMauve, fontSize: 11),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...visible.map(_buildLowStockRow),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLowStockRow(ProductModel product) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              product.name.isEmpty ? 'Tanpa nama' : product.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: darkMauve,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFE5E9),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              'Stok ${product.stock}',
+              style: const TextStyle(
+                color: Color(0xFFC45D78),
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -468,26 +651,70 @@ class _HomeScreenState extends State<HomeScreen> {
         border: Border.all(color: const Color(0xFFF0DCE8)),
       ),
       child: ListTile(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ReceiptScreen(transaction: transaction),
+            ),
+          );
+        },
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 6,
         ),
-        leading: const CircleAvatar(
-          backgroundColor: pastelLavender,
+        leading: CircleAvatar(
+          backgroundColor: transaction.voided
+              ? const Color(0xFFFFE8EC)
+              : pastelLavender,
           child: Icon(
-            Icons.shopping_bag_rounded,
-            color: darkMauve,
+            transaction.voided
+                ? Icons.cancel_outlined
+                : Icons.shopping_bag_rounded,
+            color: transaction.voided
+                ? const Color(0xFFC45D78)
+                : darkMauve,
           ),
         ),
-        title: Text(
-          'Transaksi #$shortId',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: darkMauve,
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
-          ),
+        title: Row(
+          children: [
+            Flexible(
+              child: Text(
+                'Transaksi #$shortId',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: transaction.voided ? mutedMauve : darkMauve,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  decoration: transaction.voided
+                      ? TextDecoration.lineThrough
+                      : null,
+                ),
+              ),
+            ),
+            if (transaction.voided) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 7,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFE8EC),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'Dibatalkan',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFC45D78),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
         subtitle: Text(
           itemNames.isEmpty
@@ -502,8 +729,8 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         trailing: Text(
           CurrencyFormatter.formatRupiah(transaction.totalAmount),
-          style: const TextStyle(
-            color: darkMauve,
+          style: TextStyle(
+            color: transaction.voided ? mutedMauve : darkMauve,
             fontWeight: FontWeight.bold,
             fontSize: 13,
           ),

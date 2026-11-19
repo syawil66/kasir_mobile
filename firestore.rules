@@ -12,15 +12,65 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
+    // ---------- Validasi skema koleksi ----------
+
+    // Produk harus punya nama, kategori, harga > 0, stok bulat >= 0.
+    // `updatedAt` wajib diisi server timestamp agar urutan audit tetap benar.
+    function isValidProduct(data) {
+      return data.name is string &&
+        data.name.size() > 0 &&
+        data.name.size() <= 100 &&
+        data.category is string &&
+        data.category.size() <= 50 &&
+        data.price is number &&
+        data.price > 0 &&
+        data.price <= 1000000000 &&
+        data.stock is int &&
+        data.stock >= 0 &&
+        data.stock <= 1000000 &&
+        data.updatedAt == request.time;
+    }
+
+    // Profil pengguna: nama wajib, role hanya admin/kasir.
+    // `username` opsional supaya dokumen lama tanpa username tetap bisa diubah.
+    function isValidUser(data) {
+      return data.name is string &&
+        data.name.size() > 0 &&
+        data.name.size() <= 100 &&
+        data.role in ['admin', 'kasir'] &&
+        (!data.keys().hasAny(['username']) ||
+          (data.username is string && data.username.size() <= 50));
+    }
+
+    // Diskon efektif menurut mode: nominal = apa adanya, persentase = subtotal * input / 100.
+    // Pembagi ditulis 100.0 agar rules memakai pembagian float, bukan integer (10 / 100 == 0).
+    function computedDiscount(data) {
+      return data.discountMode == 'percentage'
+        ? (data.subtotal * data.discountInput) / 100.0
+        : data.discountInput;
+    }
+
     function isValidTransactionCreate() {
       let data = request.resource.data;
       return isSignedIn() &&
+        // Skema tertutup: klien tidak boleh menyelipkan field lain
+        // (mis. `voided` saat membuat nota baru).
+        data.keys().hasOnly([
+          'items', 'stockDeltas', 'subtotal', 'discount', 'discountMode',
+          'discountInput', 'finalTotal', 'cashPaid', 'changeAmount',
+          'paymentMethod', 'cashierId', 'cashierName', 'createdAt'
+        ]) &&
         data.cashierId == request.auth.uid &&
         data.cashierName is string &&
         data.cashierName.size() > 0 &&
+        data.cashierName.size() <= 100 &&
         data.paymentMethod == 'Tunai' &&
         data.items is list &&
         data.items.size() > 0 &&
+        data.items.size() <= 50 &&
+        // Satu entri keranjang per produk, jadi jumlah delta stok harus sama dengan jumlah item.
+        data.stockDeltas is map &&
+        data.stockDeltas.size() == data.items.size() &&
         data.subtotal is number &&
         data.subtotal > 0 &&
         data.discount is number &&
@@ -29,46 +79,101 @@ service cloud.firestore {
         data.discountMode in ['nominal', 'percentage'] &&
         data.discountInput is number &&
         data.discountInput >= 0 &&
+        (data.discountMode == 'nominal'
+          ? data.discountInput <= data.subtotal
+          : data.discountInput <= 100) &&
+        // Nilai diskon harus konsisten dengan input diskon pada mode yang dipilih
+        // (toleransi 0.51 untuk pembulatan ke rupiah utuh di klien).
+        math.abs(data.discount - computedDiscount(data)) < 0.51 &&
         data.finalTotal is number &&
         data.finalTotal >= 0 &&
-        (data.finalTotal - (data.subtotal - data.discount)).abs() < 0.01 &&
+        math.abs(data.finalTotal - (data.subtotal - data.discount)) < 0.01 &&
         data.cashPaid is number &&
         data.cashPaid >= data.finalTotal &&
         data.changeAmount is number &&
         data.changeAmount >= 0 &&
-        (data.changeAmount - (data.cashPaid - data.finalTotal)).abs() < 0.01 &&
+        math.abs(data.changeAmount - (data.cashPaid - data.finalTotal)) < 0.01 &&
         data.createdAt == request.time;
     }
 
+    // Pembatalan nota: hanya admin, hanya sekali, dan hanya boleh mengubah
+    // field pembatalan. Stok dikembalikan oleh klien pada commit yang sama.
+    function isValidVoidUpdate() {
+      let data = request.resource.data;
+      return isAdmin() &&
+        // `get()` dipakai karena dokumen lama belum punya field `voided`.
+        resource.data.get('voided', false) != true &&
+        data.diff(resource.data).affectedKeys().hasOnly([
+          'voided', 'voidedAt', 'voidedBy'
+        ]) &&
+        data.voided == true &&
+        data.voidedAt == request.time &&
+        data.voidedBy == request.auth.uid;
+    }
+
+    // Pengurangan stok wajib terikat ke transaksi yang dibuat pada commit yang sama.
+    function isValidStockReduction(productId) {
+      let transactionId = request.resource.data.lastCheckoutId;
+      let checkout = getAfter(
+        /databases/$(database)/documents/transactions/$(transactionId)
+      );
+      return checkout != null &&
+        checkout.data.cashierId == request.auth.uid &&
+        checkout.data.createdAt == request.time &&
+        checkout.data.stockDeltas is map &&
+        checkout.data.stockDeltas[productId] is int &&
+        checkout.data.stockDeltas[productId] > 0 &&
+        request.resource.data.stock ==
+          resource.data.stock - checkout.data.stockDeltas[productId];
+    }
+
     // Profil pengguna: pemilik boleh membaca, hanya admin yang boleh menulis.
+    // Admin tidak boleh menurunkan role atau menghapus akunnya sendiri agar
+    // tidak terjadi lockout ketika hanya tersisa satu admin.
     match /users/{uid} {
       allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
-      allow write: if isAdmin();
+      allow create: if isAdmin() && isValidUser(request.resource.data);
+      allow update: if isAdmin() &&
+        isValidUser(request.resource.data) &&
+        (request.auth.uid != uid ||
+          request.resource.data.role == resource.data.role);
+      allow delete: if isAdmin() && request.auth.uid != uid;
     }
 
     // Produk: semua user login boleh membaca.
-    // Admin bebas CRUD; kasir hanya boleh mengurangi stok saat checkout.
+    // Admin bebas CRUD (dengan validasi skema); kasir hanya boleh mengurangi
+    // stok sebagai bagian dari checkout.
     match /products/{productId} {
       allow read: if isSignedIn();
-      allow create, delete: if isAdmin();
-      allow update: if isAdmin() || (
-        isSignedIn() &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock', 'updatedAt']) &&
-        request.resource.data.stock is int &&
-        request.resource.data.stock >= 0 &&
-        request.resource.data.stock < resource.data.stock &&
-        request.resource.data.updatedAt == request.time
-      );
+      allow create: if isAdmin() &&
+        request.resource.data.keys().hasOnly([
+          'name', 'category', 'price', 'stock', 'updatedAt'
+        ]) &&
+        isValidProduct(request.resource.data);
+      allow delete: if isAdmin();
+      allow update: if isAdmin()
+        ? isValidProduct(request.resource.data)
+        : (isSignedIn() &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['stock', 'updatedAt', 'lastCheckoutId']) &&
+          request.resource.data.stock is int &&
+          request.resource.data.stock >= 0 &&
+          request.resource.data.stock < resource.data.stock &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.lastCheckoutId is string &&
+          isValidStockReduction(productId));
     }
 
     // Transaksi: kasir hanya bisa membaca transaksinya sendiri, admin membaca semua.
-    // Pembuatan transaksi wajib lolos validasi struktur, persamaan nominal, dan identitas kasir.
+    // Pembuatan transaksi wajib lolos validasi struktur, nominal, dan identitas kasir.
+    // Nota tidak boleh dihapus (stok tidak akan kembali); gunakan pembatalan (void).
     match /transactions/{transactionId} {
       allow read: if isAdmin() || (
         isSignedIn() && resource.data.cashierId == request.auth.uid
       );
       allow create: if isValidTransactionCreate();
-      allow update, delete: if isAdmin();
+      allow update: if isValidVoidUpdate();
+      allow delete: if false;
     }
   }
 }

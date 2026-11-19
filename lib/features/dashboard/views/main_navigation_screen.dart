@@ -5,6 +5,7 @@ import '../../auth/controllers/auth_controller.dart';
 import '../../inventory/views/inventory_screen.dart';
 import 'home_screen.dart';
 import '../../pos/views/pos_screen.dart';
+import '../../pos/views/transaction_history_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -30,6 +31,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Future<void> _prepareSession() async {
     if (AuthController.currentUser == null) {
       await AuthController().restoreSession();
+    } else {
+      // Baca ulang profil agar perubahan role oleh admin langsung terpakai.
+      await AuthController().refreshProfile();
     }
 
     if (!mounted) return;
@@ -48,6 +52,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       _screens = [
         const HomeScreen(),
         PosScreen(),
+        const TransactionHistoryScreen(),
         const InventoryScreen(),
       ];
       _items = const [
@@ -62,6 +67,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           label: 'Kasir',
         ),
         BottomNavigationBarItem(
+          icon: Icon(Icons.receipt_long_outlined),
+          activeIcon: Icon(Icons.receipt_long),
+          label: 'Riwayat',
+        ),
+        BottomNavigationBarItem(
           icon: Icon(Icons.inventory_2_outlined),
           activeIcon: Icon(Icons.inventory_2),
           label: 'Stok',
@@ -71,6 +81,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       // Kasir langsung masuk ke POS; stok hanya bisa dilihat.
       _screens = [
         PosScreen(),
+        const TransactionHistoryScreen(),
         const InventoryScreen(),
         const HomeScreen(),
       ];
@@ -79,6 +90,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           icon: Icon(Icons.point_of_sale_outlined),
           activeIcon: Icon(Icons.point_of_sale),
           label: 'Kasir',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.receipt_long_outlined),
+          activeIcon: Icon(Icons.receipt_long),
+          label: 'Riwayat',
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.inventory_2_outlined),
@@ -116,8 +132,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
+        // 4 tab: paksa mode fixed agar label semua tab tetap terlihat.
+        type: BottomNavigationBarType.fixed,
+        showUnselectedLabels: true,
         selectedItemColor: AppColor.primary,
         unselectedItemColor: AppColor.textSecondary,
+        selectedFontSize: 11,
+        unselectedFontSize: 11,
         onTap: (index) {
           setState(() {
             _currentIndex = index;

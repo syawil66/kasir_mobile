@@ -58,6 +58,50 @@ class AuthController {
     }
   }
 
+  /// Kirim email reset password. Mengembalikan null jika berhasil.
+  Future<String?> sendPasswordReset(String email) async {
+    final target = email.trim();
+    if (target.isEmpty) {
+      return 'Masukkan email akun terlebih dahulu.';
+    }
+
+    try {
+      await _auth.sendPasswordResetEmail(email: target);
+      return null;
+    } on FirebaseAuthException catch (e) {
+      switch (e.code) {
+        case 'invalid-email':
+          return 'Format email tidak valid.';
+        case 'user-not-found':
+          return 'Tidak ada akun dengan email tersebut.';
+        case 'too-many-requests':
+          return 'Terlalu banyak permintaan. Coba lagi nanti.';
+        default:
+          return 'Gagal mengirim email reset: ${e.message}';
+      }
+    } catch (e) {
+      return 'Gagal mengirim email reset: $e';
+    }
+  }
+
+  /// Baca ulang profil/role dari Firestore tanpa mengubah sesi Firebase.
+  /// Dipakai saat aplikasi dibuka kembali agar perubahan role oleh admin
+  /// langsung terpakai. Gagal membaca tidak memaksa logout.
+  Future<bool> refreshProfile() async {
+    final firebaseUser = _auth.currentUser;
+    if (firebaseUser == null) {
+      currentUser = null;
+      return false;
+    }
+
+    try {
+      final error = await _loadUserProfile(firebaseUser.uid);
+      return error == null;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Dipanggil saat aplikasi dibuka. Memulihkan sesi Firebase yang masih aktif
   /// dengan membaca ulang profil/role pengguna dari Firestore.
   /// Mengembalikan true jika sesi berhasil dipulihkan.

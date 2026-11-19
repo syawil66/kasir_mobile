@@ -19,6 +19,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
   late Stream<List<ProductModel>> _productsStream;
   String searchQuery = '';
 
+  /// ID produk yang sedang dihapus, untuk menampilkan indikator di barisnya.
+  String? _deletingId;
+
   @override
   void initState() {
     super.initState();
@@ -39,12 +42,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   List<ProductModel> _filteredProducts(List<ProductModel> products) {
-    final query = searchQuery.toLowerCase();
+    final query = searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return products;
 
     return products.where((product) {
       return product.name.toLowerCase().contains(query) ||
           product.id.toLowerCase().contains(query) ||
-          product.category.toLowerCase().contains(query);
+          product.category.trim().toLowerCase().contains(query);
     }).toList();
   }
 
@@ -65,6 +69,22 @@ class _InventoryScreenState extends State<InventoryScreen> {
     });
   }
 
+  void _showMessage(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError
+            ? const Color(0xFFB86B80)
+            : const Color(0xFF7C9A7E),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openAddForm() async {
     if (!AuthController.isAdmin) return;
     await Navigator.push(
@@ -72,6 +92,64 @@ class _InventoryScreenState extends State<InventoryScreen> {
       MaterialPageRoute(
         builder: (context) => const ProductFormScreen(),
       ),
+    );
+  }
+
+  Future<void> _openDetail(ProductModel product) async {
+    final deleted = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProductDetailScreen(product: product),
+      ),
+    );
+
+    // Hapus dari halaman detail: beri konfirmasi di daftar, bukan di layar
+    // detail yang sudah ditutup.
+    if (deleted == true) {
+      _showMessage('Produk "${product.name}" berhasil dihapus.');
+    }
+  }
+
+  /// Hapus produk dari daftar inventaris (khusus admin) dengan konfirmasi.
+  Future<void> _confirmDelete(ProductModel product) async {
+    if (!AuthController.isAdmin || _deletingId != null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Hapus Produk'),
+        content: Text(
+          'Hapus produk ini?\n\n"${product.name}" akan dihapus permanen '
+          'dan tidak dapat dikembalikan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFC45D78),
+            ),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deletingId = product.id);
+
+    final error = await _controller.deleteProduct(product.id);
+
+    if (!mounted) return;
+    setState(() => _deletingId = null);
+
+    _showMessage(
+      error ?? 'Produk "${product.name}" berhasil dihapus.',
+      isError: error != null,
     );
   }
 
@@ -451,6 +529,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       itemBuilder: (context, index) {
         final product = products[index];
         final isLowStock = product.stock <= 5;
+        final isAdmin = AuthController.isAdmin;
 
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
@@ -459,16 +538,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
             borderRadius: BorderRadius.circular(18),
             child: InkWell(
               borderRadius: BorderRadius.circular(18),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ProductDetailScreen(
-                      product: product,
-                    ),
-                  ),
-                );
-              },
+              onTap: () => _openDetail(product),
               child: Padding(
                 padding: const EdgeInsets.all(14),
                 child: Row(
@@ -555,10 +625,43 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        const Icon(
-                          Icons.chevron_right,
-                          size: 20,
-                          color: Color(0xFFD0B7C9),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Aksi hapus hanya untuk admin
+                            if (isAdmin)
+                              IconButton(
+                                tooltip: 'Hapus produk',
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 32,
+                                  minHeight: 32,
+                                ),
+                                onPressed: _deletingId == product.id
+                                    ? null
+                                    : () => _confirmDelete(product),
+                                icon: _deletingId == product.id
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Color(0xFFC45D78),
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.delete_outline_rounded,
+                                        size: 20,
+                                        color: Color(0xFFC45D78),
+                                      ),
+                              ),
+                            const Icon(
+                              Icons.chevron_right,
+                              size: 20,
+                              color: Color(0xFFD0B7C9),
+                            ),
+                          ],
                         ),
                       ],
                     ),

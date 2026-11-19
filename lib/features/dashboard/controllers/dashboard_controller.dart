@@ -30,7 +30,7 @@ class DashboardController {
     final now = DateTime.now();
     final startOfDay = DateTime(now.year, now.month, now.day);
 
-    Query> query = _firestore
+    Query<Map<String, dynamic>> query = _firestore
         .collection('transactions')
         .where(
           'createdAt',
@@ -43,13 +43,20 @@ class DashboardController {
 
     return query.snapshots().map((snapshot) {
       double revenue = 0;
+      var transactionCount = 0;
+
       for (final doc in snapshot.docs) {
-        revenue += (doc.data()['finalTotal'] as num?)?.toDouble() ?? 0;
+        final data = doc.data();
+        // Nota yang dibatalkan tidak dihitung ke omzet maupun jumlah nota.
+        if (data['voided'] == true) continue;
+
+        revenue += (data['finalTotal'] as num?)?.toDouble() ?? 0;
+        transactionCount++;
       }
 
       return DashboardSummary(
         revenue: revenue,
-        transactionCount: snapshot.docs.length,
+        transactionCount: transactionCount,
       );
     });
   }

@@ -102,7 +102,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       return;
     }
 
-    Navigator.pop(context);
+    // `true` memberi tahu halaman inventaris bahwa produk sudah dihapus
+    // sehingga SnackBar konfirmasi bisa ditampilkan di sana.
+    Navigator.pop(context, true);
   }
 
   @override

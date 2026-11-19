@@ -5,6 +5,7 @@ import '../../dashboard/controllers/dashboard_controller.dart';
 import '../../inventory/controllers/inventory_controller.dart';
 import '../../inventory/models/product_model.dart';
 import '../controllers/pos_controller.dart';
+import 'receipt_screen.dart';
 import 'widgets/cart_bottom_sheet.dart';
 import 'widgets/product_card.dart';
 
@@ -94,8 +95,8 @@ class _PosScreenState extends State<PosScreen> {
       final matchesCategory = selectedCategory == 'Semua' ||
           product.category.trim() == selectedCategory;
       final matchesQuery = query.isEmpty ||
-          product.name.toLowerCase().contains(query) ||
-          product.category.toLowerCase().contains(query);
+          product.name.trim().toLowerCase().contains(query) ||
+          product.category.trim().toLowerCase().contains(query);
 
       return matchesCategory && matchesQuery;
     }).toList();
@@ -142,6 +143,18 @@ class _PosScreenState extends State<PosScreen> {
         'Transaksi berhasil disimpan. Stok produk sudah diperbarui.',
         const Color(0xFF8DAD96),
       );
+
+      final receipt = _posController.lastCheckout;
+      if (receipt != null) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ReceiptScreen(transaction: receipt),
+          ),
+        );
+        if (!mounted) return;
+        setState(() {});
+      }
     }
   }
 

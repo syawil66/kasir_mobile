@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../inventory/models/product_model.dart';
-import '../models/cart_item_model.dart';
+import '../models/transaction_models.dart';
 
 enum DiscountMode {
   nominal,
@@ -16,6 +16,9 @@ class PosController {
   double _discountInput = 0;
   String? _checkoutId;
 
+  /// Nota yang baru saja berhasil disimpan, dipakai untuk menampilkan struk.
+  TransactionModel? lastCheckout;
+
   double get discountInput => _discountInput;
 
   // Hitung total sebelum diskon
@@ -25,11 +28,28 @@ class PosController {
 
   // Nominal diskon efektif dalam Rupiah (selalu dibatasi 0 .. subtotal)
   double get discountAmount {
+    return computeDiscountAmount(
+      subtotal: subtotal,
+      mode: discountMode,
+      input: _discountInput,
+    );
+  }
+
+  /// Perhitungan diskon dipisah agar bisa diuji tanpa Firebase.
+  static double computeDiscountAmount({
+    required double subtotal,
+    required DiscountMode mode,
+    required double input,
+  }) {
     if (subtotal <= 0) return 0;
-    final rawDiscount = discountMode == DiscountMode.nominal
-        ? _discountInput
-        : subtotal * (_discountInput / 100);
-    return rawDiscount.clamp(0.0, subtotal).roundToDouble();
+    final rawDiscount = mode == DiscountMode.nominal
+        ? input
+        : subtotal * (input / 100);
+    final clamped = rawDiscount.clamp(0.0, subtotal).toDouble();
+    // Bulatkan dulu, baru batasi lagi: harga lama yang masih pecahan bisa
+    // membuat hasil pembulatan melebihi subtotal.
+    final rounded = clamped.roundToDouble();
+    return rounded > subtotal ? subtotal : rounded;
   }
 
   // Hitung total akhir setelah dikurangi diskon (minimal 0)
@@ -146,16 +166,31 @@ class PosController {
       return 'Sesi login tidak valid. Silakan login ulang.';
     }
 
+    lastCheckout = null;
+
     try {
       // Gunakan ID transaksi yang sama selama isi keranjang tidak berubah (idempotency)
-      _checkoutId ??= _firestore.collection('transactions').doc().id;
+      final checkoutId =
+          _checkoutId ??= _firestore.collection('transactions').doc().id;
       final transactionRef =
-          _firestore.collection('transactions').doc(_checkoutId);
+          _firestore.collection('transactions').doc(checkoutId);
 
       await _firestore.runTransaction((transaction) async {
         // 0. Cek idempotency: jika percobaan sebelumnya sudah commit di server, hentikan
         final existingTx = await transaction.get(transactionRef);
         if (existingTx.exists) {
+          final existing = existingTx.data() ?? const <String, dynamic>{};
+          final sameCashier = existing['cashierId'] == currentUser.id;
+          final sameTotal =
+              ((existing['finalTotal'] as num?)?.toDouble() ?? -1) == finalTotal;
+
+          if (!sameCashier || !sameTotal) {
+            throw Exception(
+              'ID transaksi ini sudah dipakai untuk transaksi lain. '
+              'Tutup lalu buka ulang halaman kasir sebelum mencoba lagi.',
+            );
+          }
+
           return;
         }
 
@@ -196,11 +231,14 @@ class PosController {
           updatedStocks[productRef] = currentStock - item.quantity;
         }
 
-        // 2. Kurangi stok masing-masing produk di Firestore
+        // 2. Kurangi stok masing-masing produk di Firestore.
+        //    `lastCheckoutId` mengikat pengurangan stok ke transaksi yang dibuat
+        //    pada commit yang sama; firestore.rules memvalidasi kecocokannya.
         updatedStocks.forEach((productRef, newStock) {
           transaction.update(productRef, {
             'stock': newStock,
             'updatedAt': FieldValue.serverTimestamp(),
+            'lastCheckoutId': checkoutId,
           });
         });
 
@@ -211,6 +249,11 @@ class PosController {
 
         transaction.set(transactionRef, {
           'items': cartItems.map((e) => e.toMap()).toList(),
+          // Delta stok per produk, dipakai firestore.rules untuk memverifikasi
+          // bahwa pengurangan stok cocok dengan isi transaksi.
+          'stockDeltas': {
+            for (final item in cartItems) item.product.id: item.quantity,
+          },
           'subtotal': computedSubtotal,
           'discount': computedDiscount,
           'discountMode': discountMode.name,
@@ -224,6 +267,31 @@ class PosController {
           'createdAt': FieldValue.serverTimestamp(),
         });
       });
+
+      // Simpan salinan nota untuk ditampilkan sebagai struk sebelum
+      // keranjang dikosongkan.
+      lastCheckout = TransactionModel(
+        id: checkoutId,
+        items: cartItems
+            .map(
+              (item) => CartItemModel(
+                product: item.product,
+                quantity: item.quantity,
+              ),
+            )
+            .toList(),
+        subtotal: subtotal,
+        discount: discountAmount,
+        discountMode: discountMode.name,
+        discountInput: _discountInput,
+        finalTotal: finalTotal,
+        cashPaid: cashPaid,
+        changeAmount: cashPaid - finalTotal,
+        paymentMethod: 'Tunai',
+        cashierId: currentUser.id,
+        cashierName: currentUser.name,
+        createdAt: DateTime.now(),
+      );
 
       clearCart();
       return null; // Checkout sukses
