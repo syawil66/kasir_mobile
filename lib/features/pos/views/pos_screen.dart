@@ -88,7 +88,7 @@ class _PosScreenState extends State<PosScreen> {
 
     return products.where((product) {
       final matchesCategory = selectedCategory == 'Semua' ||
-          product.category == selectedCategory;
+          product.category.trim() == selectedCategory;
       final matchesQuery = query.isEmpty ||
           product.name.toLowerCase().contains(query) ||
           product.category.toLowerCase().contains(query);
@@ -176,9 +176,7 @@ class _PosScreenState extends State<PosScreen> {
               const SizedBox(height: 20),
               _buildSearchBar(),
               const SizedBox(height: 15),
-              _buildCategoryFilters(),
-              const SizedBox(height: 15),
-              Expanded(child: _buildProductGrid()),
+              Expanded(child: _buildCatalogSection()),
             ],
           ),
         ),
@@ -417,31 +415,92 @@ class _PosScreenState extends State<PosScreen> {
     );
   }
 
-  // Filter kategori
-  Widget _buildCategoryFilters() {
+  // Satu StreamBuilder tunggal untuk chip kategori dan daftar produk
+  Widget _buildCatalogSection() {
     return StreamBuilder<List<ProductModel>>(
       stream: _productsStream,
       builder: (context, snapshot) {
-        final products = snapshot.data ?? const <ProductModel>[];
-        final options = _categoryOptions(products);
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: accentPink),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return _buildStatus(
+            icon: Icons.cloud_off_rounded,
+            title: 'Gagal memuat produk',
+            subtitle: '${snapshot.error}',
+            action: OutlinedButton.icon(
+              onPressed: _reloadProducts,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Coba Lagi'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFB76E8B),
+                side: const BorderSide(color: accentPink),
+              ),
+            ),
+          );
+        }
+
+        final allProducts = snapshot.data ?? const <ProductModel>[];
+        final options = _categoryOptions(allProducts);
         final selected = options.contains(_selectedCategory)
             ? _selectedCategory
             : 'Semua';
+        final products = _visibleProducts(allProducts, selected);
 
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            children: [
-              for (var index = 0; index < options.length; index++) ...[
-                if (index > 0) const SizedBox(width: 10),
-                _categoryChip(
-                  options[index],
-                  options[index] == selected,
-                ),
-              ],
-            ],
-          ),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  for (var index = 0; index < options.length; index++) ...[
+                    if (index > 0) const SizedBox(width: 10),
+                    _categoryChip(
+                      options[index],
+                      options[index] == selected,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 15),
+            Expanded(
+              child: products.isEmpty
+                  ? _buildStatus(
+                      icon: Icons.inventory_2_outlined,
+                      title: allProducts.isEmpty
+                          ? 'Belum ada produk'
+                          : 'Produk tidak ditemukan',
+                      subtitle: allProducts.isEmpty
+                          ? 'Admin perlu menambahkan produk di menu Stok.'
+                          : 'Coba gunakan kata kunci atau kategori lain.',
+                    )
+                  : GridView.builder(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 16,
+                        childAspectRatio: 0.78,
+                      ),
+                      itemCount: products.length,
+                      itemBuilder: (context, index) {
+                        final product = products[index];
+
+                        return ProductCard(
+                          product: product,
+                          onAdd: () => _addToCart(product),
+                        );
+                      },
+                    ),
+            ),
+          ],
         );
       },
     );
@@ -488,75 +547,6 @@ class _PosScreenState extends State<PosScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  // Daftar produk dari Firestore
-  Widget _buildProductGrid() {
-    return StreamBuilder<List<ProductModel>>(
-      stream: _productsStream,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: accentPink),
-          );
-        }
-
-        if (snapshot.hasError) {
-          return _buildStatus(
-            icon: Icons.cloud_off_rounded,
-            title: 'Gagal memuat produk',
-            subtitle: '${snapshot.error}',
-            action: OutlinedButton.icon(
-              onPressed: _reloadProducts,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Coba Lagi'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFFB76E8B),
-                side: const BorderSide(color: accentPink),
-              ),
-            ),
-          );
-        }
-
-        final allProducts = snapshot.data ?? const <ProductModel>[];
-        final options = _categoryOptions(allProducts);
-        final selected = options.contains(_selectedCategory)
-            ? _selectedCategory
-            : 'Semua';
-        final products = _visibleProducts(allProducts, selected);
-
-        if (products.isEmpty) {
-          return _buildStatus(
-            icon: Icons.inventory_2_outlined,
-            title: allProducts.isEmpty
-                ? 'Belum ada produk'
-                : 'Produk tidak ditemukan',
-            subtitle: allProducts.isEmpty
-                ? 'Admin perlu menambahkan produk di menu Stok.'
-                : 'Coba gunakan kata kunci atau kategori lain.',
-          );
-        }
-
-        return GridView.builder(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            childAspectRatio: 0.78,
-          ),
-          itemCount: products.length,
-          itemBuilder: (context, index) {
-            final product = products[index];
-
-            return ProductCard(
-              product: product,
-              onAdd: () => _addToCart(product),
-            );
-          },
-        );
-      },
     );
   }
 

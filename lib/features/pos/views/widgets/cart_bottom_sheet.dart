@@ -5,8 +5,8 @@ import '../../controllers/pos_controller.dart';
 import '../../models/cart_item_model.dart';
 import 'payment_dialog.dart';
 
-/// Panel keranjang belanja: ubah jumlah, atur diskon, lalu lanjut ke
-/// pembayaran. Dipakai oleh admin maupun kasir.
+/// Panel keranjang belanja: ubah jumlah, atur diskon (Nominal/Persentase),
+/// lalu lanjut ke pembayaran Tunai.
 class CartBottomSheet extends StatefulWidget {
   final PosController controller;
   final VoidCallback? onChanged;
@@ -34,9 +34,9 @@ class _CartBottomSheetState extends State<CartBottomSheet> {
   @override
   void initState() {
     super.initState();
-    final discount = widget.controller.discountAmount;
+    final initialVal = widget.controller.discountInput;
     _discountController = TextEditingController(
-      text: discount > 0 ? discount.toStringAsFixed(0) : '',
+      text: initialVal > 0 ? initialVal.toStringAsFixed(0) : '',
     );
   }
 
@@ -50,23 +50,59 @@ class _CartBottomSheetState extends State<CartBottomSheet> {
     widget.onChanged?.call();
   }
 
+  void _syncDiscountField() {
+    final effectiveInput = widget.controller.discountInput;
+    final formatted =
+        effectiveInput > 0 ? effectiveInput.toStringAsFixed(0) : '';
+
+    if (_discountController.text != formatted) {
+      _discountController.value = TextEditingValue(
+        text: formatted,
+        selection: TextSelection.collapsed(offset: formatted.length),
+      );
+    }
+  }
+
   void _updateQuantity(String productId, int newQuantity) {
     final error = widget.controller.updateQuantity(productId, newQuantity);
 
     setState(() {
       _error = error;
       if (error == null) {
+        _syncDiscountField();
         _notifyChanged();
       }
     });
   }
 
-  void _applyDiscount(String rawValue) {
-    final nominal = double.tryParse(rawValue.trim()) ?? 0;
+  void _switchDiscountMode(DiscountMode mode) {
+    if (widget.controller.discountMode == mode) return;
 
     setState(() {
       _error = null;
-      widget.controller.setDiscountNominal(nominal);
+      if (mode == DiscountMode.nominal) {
+        widget.controller.setDiscountNominal(0);
+      } else {
+        widget.controller.setDiscountPercentage(0);
+      }
+      _discountController.clear();
+      _notifyChanged();
+    });
+  }
+
+  void _applyDiscount(String rawValue) {
+    final parsed = double.tryParse(rawValue.trim()) ?? 0;
+
+    setState(() {
+      _error = null;
+      if (widget.controller.discountMode == DiscountMode.nominal) {
+        widget.controller.setDiscountNominal(parsed);
+      } else {
+        widget.controller.setDiscountPercentage(parsed);
+      }
+      if (rawValue.trim().isNotEmpty) {
+        _syncDiscountField();
+      }
       _notifyChanged();
     });
   }
@@ -74,7 +110,7 @@ class _CartBottomSheetState extends State<CartBottomSheet> {
   void _clearDiscount() {
     setState(() {
       _error = null;
-      widget.controller.setDiscountNominal(0);
+      widget.controller.clearDiscount();
       _discountController.clear();
       _notifyChanged();
     });
@@ -93,10 +129,9 @@ class _CartBottomSheetState extends State<CartBottomSheet> {
       barrierDismissible: false,
       builder: (dialogContext) => PaymentDialog(
         total: widget.controller.finalTotal,
-        onConfirm: (cashPaid, paymentMethod) {
+        onConfirm: (cashPaid) {
           return widget.controller.processCheckout(
             cashPaid: cashPaid,
-            paymentMethod: paymentMethod,
           );
         },
       ),
@@ -106,11 +141,12 @@ class _CartBottomSheetState extends State<CartBottomSheet> {
 
     setState(() {
       _isProcessing = false;
-      _discountController.clear();
     });
-    _notifyChanged();
 
+    // Hanya bersihkan input diskon jika checkout benar-benar berhasil
     if (success == true) {
+      _discountController.clear();
+      _notifyChanged();
       Navigator.pop(context, true);
     }
   }
@@ -193,7 +229,7 @@ class _CartBottomSheetState extends State<CartBottomSheet> {
                 const SizedBox(height: 4),
                 _buildItems(),
                 const SizedBox(height: 12),
-                _buildDiscountField(),
+                _buildDiscountSection(),
                 const SizedBox(height: 12),
                 _buildTotals(),
                 const SizedBox(height: 16),
@@ -361,56 +397,123 @@ class _CartBottomSheetState extends State<CartBottomSheet> {
     );
   }
 
-  Widget _buildDiscountField() {
-    return TextField(
-      controller: _discountController,
-      keyboardType: TextInputType.number,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      onChanged: _applyDiscount,
-      decoration: InputDecoration(
-        labelText: 'Diskon (Rp)',
-        hintText: '0',
-        labelStyle: const TextStyle(
-          color: mutedMauve,
-          fontSize: 13,
-        ),
-        hintStyle: const TextStyle(
-          color: Color(0xFFB4A6B5),
-          fontSize: 13,
-        ),
-        prefixIcon: const Icon(
-          Icons.local_offer_outlined,
-          color: accentPink,
-          size: 20,
-        ),
-        suffixIcon: widget.controller.discountAmount > 0
-            ? IconButton(
-                tooltip: 'Hapus diskon',
-                onPressed: _clearDiscount,
-                icon: const Icon(
-                  Icons.close,
-                  color: accentPink,
-                  size: 18,
+  Widget _buildDiscountSection() {
+    final isPercentage =
+        widget.controller.discountMode == DiscountMode.percentage;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Jenis Diskon',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: mutedMauve,
                 ),
-              )
-            : null,
-        filled: true,
-        fillColor: const Color(0xFFFFF9FC),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 14,
+              ),
+            ),
+            _buildModeChip(
+              label: 'Nominal (Rp)',
+              isSelected: !isPercentage,
+              onTap: () => _switchDiscountMode(DiscountMode.nominal),
+            ),
+            const SizedBox(width: 8),
+            _buildModeChip(
+              label: 'Persen (%)',
+              isSelected: isPercentage,
+              onTap: () => _switchDiscountMode(DiscountMode.percentage),
+            ),
+          ],
         ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFF0DCE8)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _discountController,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          onChanged: _applyDiscount,
+          decoration: InputDecoration(
+            labelText: isPercentage ? 'Diskon (%)' : 'Diskon (Rp)',
+            hintText: isPercentage ? '0 - 100' : '0',
+            labelStyle: const TextStyle(
+              color: mutedMauve,
+              fontSize: 13,
+            ),
+            hintStyle: const TextStyle(
+              color: Color(0xFFB4A6B5),
+              fontSize: 13,
+            ),
+            prefixIcon: const Icon(
+              Icons.local_offer_outlined,
+              color: accentPink,
+              size: 20,
+            ),
+            suffixText: isPercentage ? '%' : null,
+            suffixStyle: const TextStyle(
+              color: darkMauve,
+              fontWeight: FontWeight.bold,
+            ),
+            suffixIcon: widget.controller.discountInput > 0
+                ? IconButton(
+                    tooltip: 'Hapus diskon',
+                    onPressed: _clearDiscount,
+                    icon: const Icon(
+                      Icons.close,
+                      color: accentPink,
+                      size: 18,
+                    ),
+                  )
+                : null,
+            filled: true,
+            fillColor: const Color(0xFFFFF9FC),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 14,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFF0DCE8)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFF0DCE8)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: accentPink, width: 1.5),
+            ),
+          ),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFF0DCE8)),
+      ],
+    );
+  }
+
+  Widget _buildModeChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? accentPink : const Color(0xFFF9EAF0),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? accentPink : const Color(0xFFF0DCE8),
+          ),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: accentPink, width: 1.5),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            color: isSelected ? Colors.white : mutedMauve,
+          ),
         ),
       ),
     );
@@ -418,6 +521,10 @@ class _CartBottomSheetState extends State<CartBottomSheet> {
 
   Widget _buildTotals() {
     final controller = widget.controller;
+    final isPercentage = controller.discountMode == DiscountMode.percentage;
+    final discountLabel = isPercentage && controller.discountInput > 0
+        ? 'Diskon (${controller.discountInput.toStringAsFixed(0)}%)'
+        : 'Diskon';
 
     return Container(
       width: double.infinity,
@@ -436,7 +543,7 @@ class _CartBottomSheetState extends State<CartBottomSheet> {
           if (controller.discountAmount > 0) ...[
             const SizedBox(height: 6),
             _totalRow(
-              'Diskon',
+              discountLabel,
               '- ${CurrencyFormatter.formatRupiah(controller.discountAmount)}',
               valueColor: dangerMauve,
             ),

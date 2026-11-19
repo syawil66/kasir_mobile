@@ -12,6 +12,27 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
+    function isValidTransactionCreate() {
+      let data = request.resource.data;
+      return isSignedIn() &&
+        data.cashierId == request.auth.uid &&
+        data.paymentMethod == 'Tunai' &&
+        data.items is list &&
+        data.items.size() > 0 &&
+        data.subtotal is number &&
+        data.subtotal >= 0 &&
+        data.discount is number &&
+        data.discount >= 0 &&
+        data.discount <= data.subtotal &&
+        data.finalTotal is number &&
+        data.finalTotal >= 0 &&
+        data.cashPaid is number &&
+        data.cashPaid >= data.finalTotal &&
+        data.changeAmount is number &&
+        data.changeAmount >= 0 &&
+        data.createdAt == request.time;
+    }
+
     // Profil pengguna: pemilik boleh membaca, hanya admin yang boleh menulis.
     match /users/{uid} {
       allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
@@ -32,10 +53,13 @@ service cloud.firestore {
       );
     }
 
-    // Transaksi: semua user login boleh membaca dan membuat nota.
-    // Mengubah atau menghapus riwayat hanya boleh dilakukan admin.
+    // Transaksi: kasir hanya bisa membaca transaksinya sendiri, admin membaca semua.
+    // Pembuatan transaksi wajib lolos validasi struktur, nominal, dan identitas kasir.
     match /transactions/{transactionId} {
-      allow read, create: if isSignedIn();
+      allow read: if isAdmin() || (
+        isSignedIn() && resource.data.cashierId == request.auth.uid
+      );
+      allow create: if isValidTransactionCreate();
       allow update, delete: if isAdmin();
     }
   }

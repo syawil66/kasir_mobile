@@ -3,38 +3,72 @@ import '../../auth/controllers/auth_controller.dart';
 import '../../inventory/models/product_model.dart';
 import '../models/cart_item_model.dart';
 
+enum DiscountMode {
+  nominal,
+  percentage,
+}
+
 class PosController {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final List<CartItemModel> cartItems = [];
 
-  double discountAmount = 0; // Nominal diskon dalam Rupiah
+  DiscountMode discountMode = DiscountMode.nominal;
+  double _discountInput = 0;
+  String? _checkoutId;
+
+  double get discountInput => _discountInput;
 
   // Hitung total sebelum diskon
   double get subtotal {
     return cartItems.fold(0, (total, item) => total + item.totalPrice);
   }
 
+  // Nominal diskon efektif dalam Rupiah (selalu dibatasi 0 .. subtotal)
+  double get discountAmount {
+    if (subtotal <= 0) return 0;
+    final rawDiscount = discountMode == DiscountMode.nominal
+        ? _discountInput
+        : subtotal * (_discountInput / 100);
+    return rawDiscount.clamp(0.0, subtotal).roundToDouble();
+  }
+
   // Hitung total akhir setelah dikurangi diskon (minimal 0)
   double get finalTotal {
-    final total = subtotal - discountAmount;
-    return total < 0 ? 0 : total;
+    return (subtotal - discountAmount).clamp(0.0, subtotal).toDouble();
+  }
+
+  void _resetCheckoutId() {
+    _checkoutId = null;
+  }
+
+  void _syncNominalCap() {
+    if (discountMode == DiscountMode.nominal && _discountInput > subtotal) {
+      _discountInput = subtotal;
+    }
   }
 
   /// Set diskon berdasarkan nominal Rupiah
   void setDiscountNominal(double nominal) {
-    if (nominal < 0) {
-      discountAmount = 0;
-    } else if (nominal > subtotal) {
-      discountAmount = subtotal;
-    } else {
-      discountAmount = nominal;
-    }
+    discountMode = DiscountMode.nominal;
+    final clean = nominal.isFinite && nominal > 0 ? nominal : 0.0;
+    _discountInput = clean > subtotal ? subtotal : clean;
+    _resetCheckoutId();
   }
 
   /// Set diskon berdasarkan persentase (0 - 100%)
   void setDiscountPercentage(double percentage) {
-    final validPercent = percentage.clamp(0, 100);
-    discountAmount = subtotal * (validPercent / 100);
+    discountMode = DiscountMode.percentage;
+    _discountInput = percentage.isFinite
+        ? percentage.clamp(0.0, 100.0).toDouble()
+        : 0.0;
+    _resetCheckoutId();
+  }
+
+  /// Hapus diskon dan kembalikan ke mode nominal
+  void clearDiscount() {
+    discountMode = DiscountMode.nominal;
+    _discountInput = 0;
+    _resetCheckoutId();
   }
 
   /// Tambah barang ke keranjang dengan validasi sisa stok
@@ -53,10 +87,8 @@ class PosController {
       cartItems.add(CartItemModel(product: product, quantity: 1));
     }
 
-    // Sesuaikan ulang diskon jika subtotal berubah
-    if (discountAmount > subtotal) {
-      discountAmount = subtotal;
-    }
+    _syncNominalCap();
+    _resetCheckoutId();
     return null;
   }
 
@@ -73,22 +105,25 @@ class PosController {
       cartItems[index].quantity = newQty;
     }
 
-    if (discountAmount > subtotal) {
-      discountAmount = subtotal;
+    if (cartItems.isEmpty) {
+      clearDiscount();
+    } else {
+      _syncNominalCap();
     }
+
+    _resetCheckoutId();
     return null;
   }
 
   void clearCart() {
     cartItems.clear();
-    discountAmount = 0;
+    clearDiscount();
   }
 
-  /// Proses Checkout: Simpan Transaksi + Potong Stok Otomatis di Firestore.
-  /// Dapat dipakai oleh admin maupun kasir selama sesi login masih aktif.
+  /// Proses Checkout Tunai: Validasi Stok & Harga Terbaru + Simpan Transaksi
+  /// menggunakan Firestore Transaction & Idempotency Key.
   Future<String?> processCheckout({
     required double cashPaid,
-    String paymentMethod = 'Tunai',
   }) async {
     if (cartItems.isEmpty) {
       return 'Keranjang belanja masih kosong!';
@@ -104,10 +139,19 @@ class PosController {
     }
 
     try {
-      final transactionRef = _firestore.collection('transactions').doc();
+      // Gunakan ID transaksi yang sama selama isi keranjang tidak berubah (idempotency)
+      _checkoutId ??= _firestore.collection('transactions').doc().id;
+      final transactionRef =
+          _firestore.collection('transactions').doc(_checkoutId);
 
       await _firestore.runTransaction((transaction) async {
-        // 1. Cek stok terbaru tiap produk di server sebelum dipotong
+        // 0. Cek idempotency: jika percobaan sebelumnya sudah commit di server, hentikan
+        final existingTx = await transaction.get(transactionRef);
+        if (existingTx.exists) {
+          return;
+        }
+
+        // 1. Baca seluruh dokumen produk terlebih dahulu (wajib sebelum operasi tulis)
         final Map<DocumentReference, int> updatedStocks = {};
 
         for (final item in cartItems) {
@@ -119,8 +163,22 @@ class PosController {
             throw Exception('Produk ${item.product.name} tidak ditemukan.');
           }
 
-          final currentStock =
-              (snapshot.data()?['stock'] as num?)?.toInt() ?? 0;
+          final data = snapshot.data()!;
+          final currentStock = (data['stock'] as num?)?.toInt() ?? 0;
+          final currentPrice = (data['price'] as num?)?.toDouble();
+
+          if (currentPrice == null || !currentPrice.isFinite) {
+            throw Exception('Harga produk ${item.product.name} tidak valid.');
+          }
+
+          if ((currentPrice - item.product.price).abs() > 0.01) {
+            throw Exception(
+              'Harga ${item.product.name} telah berubah menjadi '
+              'Rp ${currentPrice.toStringAsFixed(0)}. '
+              'Hapus dan tambahkan ulang item ke keranjang.',
+            );
+          }
+
           if (currentStock < item.quantity) {
             throw Exception(
               'Stok ${item.product.name} tidak mencukupi (sisa: $currentStock).',
@@ -139,14 +197,20 @@ class PosController {
         });
 
         // 3. Simpan riwayat nota transaksi
+        final computedSubtotal = subtotal;
+        final computedDiscount = discountAmount;
+        final computedFinalTotal = finalTotal;
+
         transaction.set(transactionRef, {
           'items': cartItems.map((e) => e.toMap()).toList(),
-          'subtotal': subtotal,
-          'discount': discountAmount,
-          'finalTotal': finalTotal,
+          'subtotal': computedSubtotal,
+          'discount': computedDiscount,
+          'discountMode': discountMode.name,
+          'discountInput': _discountInput,
+          'finalTotal': computedFinalTotal,
           'cashPaid': cashPaid,
-          'changeAmount': cashPaid - finalTotal,
-          'paymentMethod': paymentMethod,
+          'changeAmount': cashPaid - computedFinalTotal,
+          'paymentMethod': 'Tunai',
           'cashierId': currentUser.id,
           'cashierName': currentUser.name,
           'createdAt': FieldValue.serverTimestamp(),
